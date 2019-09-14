@@ -8,6 +8,7 @@ Each agent can make twice as many units of the resource they value less. Each ha
 they can make x units of the resource they value more and 2*(B - x) units of the resource they value less,
 for x in {0, 1, ..., B}.
 
+The bargaining solution is given by
 argmax_{y, z} \int log{ a^y_t1 * (y_1 + y_2) + a^z_t1 * (z1 + z2) } dP(t1) # ToDo: currently lacks disagreement pt.
             + \int log{ a^y_t2 * (y_1 + y_2) + a^z_t2 * (z1 + z2) } dP(t2)
 
@@ -54,7 +55,7 @@ def log_utility(yi, ymi, zi, zmi, ay_i, ay_mi, az_i, az_mi, budget):
   if surplus_utility > 0:
     return np.log(surplus_utility + 1)
   else:
-    return 0  # ToDo: check that this makes sense
+    return 0
 
 
 def independent_gaussian_nash_welfare(y1, y2, z1, z2, mu_ay_1, mu_ay_2, mu_az_1, mu_az_2, budget, num_draws=1000):
