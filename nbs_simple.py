@@ -8,7 +8,7 @@ u_i(y, z) = a^y_i * y + a^z_i * z.
 Each agent can make U units total, so each agent's action is an allocation (y_i, z_i : y_i + z_i = U). The
 NBS is given by
 
-argmin_{y, z} \int log{ a^y_t1 * (y_1 + y_2) + a^z_t1 * (z1 + z2) } dP(t1) # ToDo: currently lacks disagreement pt.
+argmax_{y, z} \int log{ a^y_t1 * (y_1 + y_2) + a^z_t1 * (z1 + z2) } dP(t1) # ToDo: currently lacks disagreement pt.
             + \int log{ a^y_t2 * (y_1 + y_2) + a^z_t2 * (z1 + z2) } dP(t2)
 
 where P is the prior over types.
@@ -108,12 +108,12 @@ def nbs_for_independent_gaussan_priors(mu_ay_1, mu_ay_2, mu_az_1, mu_az_2, budge
         y1_opt = y1
         y2_opt = y2
 
-  return y1_opt, y2_opt
+  return 2*y1_opt, y2_opt, budget - y1_opt, 2*(budget - y2_opt)
 
 
 def inefficiency_from_gaussian_prior_differences(budget=10, num_draws=1000):
   """
-  Measure the inefficiencies that arise from players using the bargaining solutions that arise from different priors,
+  Measure the inefficiencies that arise from players using the bargaining solutions corresponding to different priors,
   when priors are independent gaussian.
 
   Priors are structured like so:
@@ -136,8 +136,8 @@ def inefficiency_from_gaussian_prior_differences(budget=10, num_draws=1000):
   mu_az_2_1 = mu_ay_1_1
 
   # Bargaining solution for 1's prior
-  y1_opt_1, y2_opt_2 = nbs_for_independent_gaussan_priors(mu_ay_1_1, mu_ay_2_1, mu_az_1_1, mu_az_2_1, budget=budget,
-                                                          num_draws=num_draws)
+  y1_opt_1, z1_opt_1, y2_opt_1, z2_opt_1 = \
+    nbs_for_independent_gaussan_priors(mu_ay_1_1, mu_ay_2_1, mu_az_1_1, mu_az_2_1, budget=budget, num_draws=num_draws)
 
   # Bargaining solution for 2's prior, as mu_ay_1_2 varies
   prior_differences = np.linspace(-9, 9, 19)
@@ -147,12 +147,12 @@ def inefficiency_from_gaussian_prior_differences(budget=10, num_draws=1000):
     mu_az_1_2 = 1
     mu_ay_2_2 = mu_az_1_2
     mu_az_2_2 = mu_ay_1_2
-    y1_opt_2, y2_opt_2 = nbs_for_independent_gaussan_priors(mu_ay_1_2, mu_ay_2_2, mu_az_1_2, mu_az_2_2, budget=budget,
-                                                            num_draws=num_draws)
+    y1_opt_2, y2_opt_2, z1_opt_2, z2_opt_2 = \
+      nbs_for_independent_gaussan_priors(mu_ay_1_2, mu_ay_2_2, mu_az_1_2, mu_az_2_2, budget=budget, num_draws=num_draws)
 
     # Compute true welfare, using player 1's prior, at the bargaining solution computed by each player
-    true_welfare = independent_gaussian_nash_welfare(y1_opt_1, y2_opt_2, z1_opt_1, z2_opt_2, mu_ay_1, mu_ay_2, mu_az_1,
-                                                     mu_az_2, num_draws=1000)
+    true_welfare = independent_gaussian_nash_welfare(y1_opt_1, y2_opt_2, z1_opt_1, z2_opt_2, mu_ay_1_1, mu_ay_2_1,
+                                                     mu_az_1_1, mu_az_2_1, num_draws=1000)
     true_welfares.append(true_welfare)
 
   # Display true welfare as a function of prior difference
@@ -163,7 +163,7 @@ def inefficiency_from_gaussian_prior_differences(budget=10, num_draws=1000):
 
 
 if __name__ == "__main__":
-  pass
+  inefficiency_from_gaussian_prior_differences()
 
 
 
