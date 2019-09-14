@@ -17,21 +17,29 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-def utility(y1, y2, z1, z2, ay, az):
+def utility(y1, y2, z1, z2, ay_i, ay_mi, az_i, az_2, budget):
   """
-  Player's utility at a given amount of y and z.
+  Player i's utility at a given amount of y and z.
 
   :param y1: Units of y created by player 1.
   :param y2: Units of y created by player 2.
   :param z1: Units of z created by player 1.
   :param z2: Units of z created by player 2.
-  :param ay: Coefficient of y in this utility function.
-  :param az: Coefficient of z in this utility function.
+  :param ay_i: Coefficient of y in i's utility function.
+  :param az_i: Coefficient of z in i's utility function.
+  :param ay_mi: Coefficient of y in -i's utility function.
+  :param az_mi: Coefficient of z in -i's utility function.
   :return:
   """
-  utility_ = ay*(y1 + y2) + az*(z1 + z2)
-  clipped_utility = np.max((utility_, 0.01)) # ToDo: this ensures positivity; replace with comparison to disagreement.
-  return clipped_utility
+  utility_ = ay_i*(y1 + y2) + az_i*(z1 + z2)
+
+  # Get the best players could do without trade, to form disagreement point
+  value_from_is_unilateral_action = budget*max((ay_i, az_i))  # ToDo: not accounting for ability to make diff. amounts of y,z
+  value_from_mis_unilateral_action = budget*(ay_i*(ay_mi >= az_mi) + az_i*(az_mi > ay_mi))
+  disagreement_point = value_from_is_unilateral_action + value_from_mis_unilateral_action
+
+  surplus_utility = utility_ - disagreement_point
+  return surplus_utility
 
 
 def independent_gaussian_expected_welfare(y1, y2, z1, z2, mu_ay, mu_az, num_draws=1000):
