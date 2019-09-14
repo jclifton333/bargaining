@@ -4,9 +4,9 @@ Model:
 Two resources y and z, such that agent i's utility function is
 u_i(y, z) = a^y_i * y + a^z_i * z.
 
-# ToDo: amount of units should depend on agents' utility functions.
-Each agent can make U units total, so each agent's action is an allocation (y_i, z_i : y_i + z_i = U). The
-NBS is given by
+Each agent can make twice as many units of the resource they value less. Each has (the same) budget B, such that
+they can make x units of the resource they value more and 2*(B - x) units of the resource they value less,
+for x in {0, 1, ..., B}.
 
 argmax_{y, z} \int log{ a^y_t1 * (y_1 + y_2) + a^z_t1 * (z1 + z2) } dP(t1) # ToDo: currently lacks disagreement pt.
             + \int log{ a^y_t2 * (y_1 + y_2) + a^z_t2 * (z1 + z2) } dP(t2)
@@ -17,7 +17,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-def utility(y1, y2, z1, z2, ay_i, ay_mi, az_i, az_2, budget):
+def log_utility(y1, y2, z1, z2, ay_i, ay_mi, az_i, az_mi, budget):
   """
   Player i's utility at a given amount of y and z.
 
@@ -34,15 +34,26 @@ def utility(y1, y2, z1, z2, ay_i, ay_mi, az_i, az_2, budget):
   utility_ = ay_i*(y1 + y2) + az_i*(z1 + z2)
 
   # Get the best players could do without trade, to form disagreement point
-  value_from_is_unilateral_action = budget*max((ay_i, az_i))  # ToDo: not accounting for ability to make diff. amounts of y,z
-  value_from_mis_unilateral_action = budget*(ay_i*(ay_mi >= az_mi) + az_i*(az_mi > ay_mi))
+  # (Recall that players can make twice as much of the resource that they value less)
+  value_from_is_unilateral_action = \
+    budget*max((ay_i + ay_i*(ay_i <= az_i), az_i + az_i*(az_i < ay_i)))
+  if ay_mi > az_mi:
+    mi_chooses_y = 2*az_mi <= ay_mi
+    value_from_mis_unilateral_action = budget*(ay_i*mi_chooses_y + 2*az_i*(1-mi_chooses_y))
+  else:
+    mi_chooses_y = 2*ay_mi > az_mi
+    value_from_mis_unilateral_action = budget*(2*ay_i*mi_chooses_y + az_i*(1-mi_chooses_y))
+
+  # Compute disagreement and surplus
   disagreement_point = value_from_is_unilateral_action + value_from_mis_unilateral_action
-
   surplus_utility = utility_ - disagreement_point
-  return surplus_utility
+  if surplus_utility + 1 > 0:
+    return np.log(surplus_utility + 1)
+  else:
+    return 0  # ToDo: check that this makes sense
 
 
-def independent_gaussian_expected_welfare(y1, y2, z1, z2, mu_ay, mu_az, num_draws=1000):
+def independent_gaussian_nash_welfare(y1, y2, z1, z2, mu_ay_1, mu_ay_2, mu_az_1, mu_az_2, budget, num_draws=1000):
   """
   Compute expected welfare at a given allocation for a single agent, where prior over types is given by
   independent Gaussians with means mu_ay, mu_az over coefficients ay, az.
@@ -56,32 +67,20 @@ def independent_gaussian_expected_welfare(y1, y2, z1, z2, mu_ay, mu_az, num_draw
   :param num_draws:
   :return:
   """
-  ay_prior_draws = np.random.normal(loc=mu_ay, size=num_draws)
-  az_prior_draws = np.random.normal(loc=mu_az, size=num_draws)
-  welfare_at_each_draw = np.array([np.log(utility(y1, y2, z1, z2, ay, az)) for ay, az in zip(ay_prior_draws,
-                                                                                             az_prior_draws)])
-  return np.mean(welfare_at_each_draw)
+  ay_1_prior_draws = np.random.normal(loc=mu_ay_1, size=num_draws)
+  az_1_prior_draws = np.random.normal(loc=mu_az_1, size=num_draws)
+  ay_2_prior_draws = np.random.normal(loc=mu_ay_2, size=num_draws)
+  az_2_prior_draws = np.random.normal(loc=mu_az_2, size=num_draws)
 
-
-def independent_gaussian_nash_welfare(y1, y2, z1, z2, mu_ay_1, mu_ay_2, mu_az_1, mu_az_2, num_draws=1000):
-  """
-  Compute Nash welfare when priors over types are given by independent Gaussians over utility coefficients
-  ay_i, az_i, i=1,2.
-
-  :param y1:
-  :param y2:
-  :param z1:
-  :param z2:
-  :param mu_ay_1:
-  :param mu_ay_2:
-  :param mu_az_1:
-  :param num_draws:
-  :return:
-  """
-  expected_welfare_1 = independent_gaussian_expected_welfare(y1, y2, z1, z2, mu_ay_1, mu_az_1, num_draws=num_draws)
-  expected_welfare_2 = independent_gaussian_expected_welfare(y1, y2, z1, z2, mu_ay_2, mu_az_2, num_draws=num_draws)
-  nash_welfare = expected_welfare_1 + expected_welfare_2
-  return nash_welfare
+  player_1_welfare_at_each_draw = np.array([log_utility(y1, y2, z1, z2, ay_1, ay_2, az_1, az_2, budget)
+                                            for ay_1, ay_2, az_1, az_2
+                                            in zip(ay_1_prior_draws, ay_2_prior_draws, az_1_prior_draws,
+                                                   az_2_prior_draws)])
+  player_2_welfare_at_each_draw = np.array([log_utility(y1, y2, z1, z2, ay_1, ay_2, az_1, az_2, budget)
+                                            for ay_2, ay_1, az_2, az_1
+                                            in zip(ay_2_prior_draws, ay_1_prior_draws, az_2_prior_draws,
+                                                   az_1_prior_draws)])
+  return np.mean(player_1_welfare_at_each_draw + player_2_welfare_at_each_draw)
 
 
 def nbs_for_independent_gaussan_priors(mu_ay_1, mu_ay_2, mu_az_1, mu_az_2, budget=10, num_draws=1000):
@@ -97,9 +96,6 @@ def nbs_for_independent_gaussan_priors(mu_ay_1, mu_ay_2, mu_az_1, mu_az_2, budge
   :param num_draws:
   :return:
   """
-  # ToDo: assuming 1 prefers y to z, and 2 prefers z to y. This means that 1 will be able to create more z and
-  # ToDo: 2 will be able to create more y.
-
   optimal_welfare = -float('inf')
   y1_opt = None
   y2_opt = None
@@ -109,7 +105,7 @@ def nbs_for_independent_gaussan_priors(mu_ay_1, mu_ay_2, mu_az_1, mu_az_2, budge
     z1 = budget - y1
     for y2 in range(budget + 1):
       z2 = budget - y2
-      nash_welfare_ = independent_gaussian_nash_welfare(2*y1, y2, z1, 2*z2, mu_ay_1, mu_ay_2, mu_az_1, mu_az_2,
+      nash_welfare_ = independent_gaussian_nash_welfare(2*y1, y2, z1, 2*z2, mu_ay_1, mu_ay_2, mu_az_1, mu_az_2, budget,
                                                         num_draws=num_draws)
       if nash_welfare_ > optimal_welfare:
         optimal_welfare = nash_welfare_
@@ -160,7 +156,7 @@ def inefficiency_from_gaussian_prior_differences(budget=10, num_draws=1000):
 
     # Compute true welfare, using player 1's prior, at the bargaining solution computed by each player
     true_welfare = independent_gaussian_nash_welfare(y1_opt_1, y2_opt_2, z1_opt_1, z2_opt_2, mu_ay_1_1, mu_ay_2_1,
-                                                     mu_az_1_1, mu_az_2_1, num_draws=1000)
+                                                     mu_az_1_1, mu_az_2_1, budget, num_draws=1000)
     true_welfares.append(true_welfare)
 
   # Display true welfare as a function of prior difference
