@@ -17,7 +17,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-def log_utility(y1, y2, z1, z2, ay_i, ay_mi, az_i, az_mi, budget):
+def log_utility(yi, ymi, zi, zmi, ay_i, ay_mi, az_i, az_mi, budget):
   """
   Player i's utility at a given amount of y and z.
 
@@ -31,13 +31,16 @@ def log_utility(y1, y2, z1, z2, ay_i, ay_mi, az_i, az_mi, budget):
   :param az_mi: Coefficient of z in -i's utility function.
   :return:
   """
-  utility_ = ay_i*(y1 + y2) + az_i*(z1 + z2)
+  i_prefers_y = ay_i > az_i
+  mi_prefers_y = ay_mi > az_mi
+  utility_ = ay_i*(yi + ymi + yi*i_prefers_y + ymi*mi_prefers_y) \
+             + az_i*(zi + zmi + zi*(1-i_prefers_y) + zmi*(1-mi_prefers_y))
 
   # Get the best players could do without trade, to form disagreement point
   # (Recall that players can make twice as much of the resource that they value less)
   value_from_is_unilateral_action = \
     budget*max((ay_i + ay_i*(ay_i <= az_i), az_i + az_i*(az_i < ay_i)))
-  if ay_mi > az_mi:
+  if mi_prefers_y:
     mi_chooses_y = 2*az_mi <= ay_mi
     value_from_mis_unilateral_action = budget*(ay_i*mi_chooses_y + 2*az_i*(1-mi_chooses_y))
   else:
@@ -76,7 +79,7 @@ def independent_gaussian_nash_welfare(y1, y2, z1, z2, mu_ay_1, mu_ay_2, mu_az_1,
                                             for ay_1, ay_2, az_1, az_2
                                             in zip(ay_1_prior_draws, ay_2_prior_draws, az_1_prior_draws,
                                                    az_2_prior_draws)])
-  player_2_welfare_at_each_draw = np.array([log_utility(y1, y2, z1, z2, ay_1, ay_2, az_1, az_2, budget)
+  player_2_welfare_at_each_draw = np.array([log_utility(y2, y1, z2, z1, ay_2, ay_1, az_2, az_1, budget)
                                             for ay_2, ay_1, az_2, az_1
                                             in zip(ay_2_prior_draws, ay_1_prior_draws, az_2_prior_draws,
                                                    az_1_prior_draws)])
@@ -105,14 +108,14 @@ def nbs_for_independent_gaussan_priors(mu_ay_1, mu_ay_2, mu_az_1, mu_az_2, budge
     z1 = budget - y1
     for y2 in range(budget + 1):
       z2 = budget - y2
-      nash_welfare_ = independent_gaussian_nash_welfare(2*y1, y2, z1, 2*z2, mu_ay_1, mu_ay_2, mu_az_1, mu_az_2, budget,
+      nash_welfare_ = independent_gaussian_nash_welfare(y1, y2, z1, z2, mu_ay_1, mu_ay_2, mu_az_1, mu_az_2, budget,
                                                         num_draws=num_draws)
       if nash_welfare_ > optimal_welfare:
         optimal_welfare = nash_welfare_
         y1_opt = y1
         y2_opt = y2
 
-  return 2*y1_opt, y2_opt, budget - y1_opt, 2*(budget - y2_opt)
+  return y1_opt, y2_opt, budget - y1_opt, budget - y2_opt
 
 
 def inefficiency_from_gaussian_prior_differences(budget=10, num_draws=1000):
