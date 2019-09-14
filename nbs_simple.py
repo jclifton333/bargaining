@@ -15,6 +15,7 @@ where P is the prior over types.
 """
 import numpy as np
 import matplotlib.pyplot as plt
+import pdb
 
 
 def log_utility(yi, ymi, zi, zmi, ay_i, ay_mi, az_i, az_mi, budget):
@@ -50,7 +51,7 @@ def log_utility(yi, ymi, zi, zmi, ay_i, ay_mi, az_i, az_mi, budget):
   # Compute disagreement and surplus
   disagreement_point = value_from_is_unilateral_action + value_from_mis_unilateral_action
   surplus_utility = utility_ - disagreement_point
-  if surplus_utility + 1 > 0:
+  if surplus_utility > 0:
     return np.log(surplus_utility + 1)
   else:
     return 0  # ToDo: check that this makes sense
@@ -72,7 +73,7 @@ def independent_gaussian_nash_welfare(y1, y2, z1, z2, mu_ay_1, mu_ay_2, mu_az_1,
   """
   ay_1_prior_draws = np.random.normal(loc=mu_ay_1, size=num_draws)
   az_1_prior_draws = np.random.normal(loc=mu_az_1, size=num_draws)
-  ay_2_prior_draws = np.random.normal(loc=mu_ay_2, size=num_draws)
+  ay_2_prior_draws = np.random.normal(loc=mu_ay_2 , size=num_draws)
   az_2_prior_draws = np.random.normal(loc=mu_az_2, size=num_draws)
 
   player_1_welfare_at_each_draw = np.array([log_utility(y1, y2, z1, z2, ay_1, ay_2, az_1, az_2, budget)
@@ -83,7 +84,14 @@ def independent_gaussian_nash_welfare(y1, y2, z1, z2, mu_ay_1, mu_ay_2, mu_az_1,
                                             for ay_2, ay_1, az_2, az_1
                                             in zip(ay_2_prior_draws, ay_1_prior_draws, az_2_prior_draws,
                                                    az_1_prior_draws)])
-  return np.mean(player_1_welfare_at_each_draw + player_2_welfare_at_each_draw)
+
+  # Check that action is feasible
+  # ToDo: not quite right, need to exclude actions that are not feasible for some type
+  if np.sum(player_2_welfare_at_each_draw == 0) < num_draws and np.sum(player_1_welfare_at_each_draw == 0) < num_draws:
+    return np.mean(player_1_welfare_at_each_draw[np.where(player_1_welfare_at_each_draw > 0)]) + \
+           np.mean(player_2_welfare_at_each_draw[np.where(player_2_welfare_at_each_draw > 0)])
+  else:
+    return -float('inf')
 
 
 def nbs_for_independent_gaussan_priors(mu_ay_1, mu_ay_2, mu_az_1, mu_az_2, budget=10, num_draws=1000):
@@ -147,9 +155,10 @@ def inefficiency_from_gaussian_prior_differences(budget=10, num_draws=1000):
     nbs_for_independent_gaussan_priors(mu_ay_1_1, mu_ay_2_1, mu_az_1_1, mu_az_2_1, budget=budget, num_draws=num_draws)
 
   # Bargaining solution for 2's prior, as mu_ay_1_2 varies
-  prior_differences = np.linspace(-9, 9, 19)
+  prior_differences = np.linspace(-2, 2, 5)
   true_welfares = []
   for diff in prior_differences:
+    print(diff)
     mu_ay_1_2 = mu_ay_1_1 + diff
     mu_az_1_2 = 1
     mu_ay_2_2 = mu_az_1_2
