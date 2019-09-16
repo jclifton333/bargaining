@@ -117,10 +117,10 @@ jclifto@laber-gpu02:~/bayesRL/src/hypothesis_test$
   y2_opt = None
 
   # Draw from prior over types
-  ay_1_prior_draws = np.random.normal(loc=mu_ay_1, scale=0.1, size=num_draws)
-  az_1_prior_draws = np.random.normal(loc=mu_az_1, scale=0.1, size=num_draws)
-  ay_2_prior_draws = np.random.normal(loc=mu_ay_2, scale=0.1, size=num_draws)
-  az_2_prior_draws = np.random.normal(loc=mu_az_2, scale=0.1, size=num_draws)
+  ay_1_prior_draws = np.random.normal(loc=mu_ay_1, scale=1, size=num_draws)
+  az_1_prior_draws = np.random.normal(loc=mu_az_1, scale=1, size=num_draws)
+  ay_2_prior_draws = np.random.normal(loc=mu_ay_2, scale=1, size=num_draws)
+  az_2_prior_draws = np.random.normal(loc=mu_az_2, scale=1, size=num_draws)
 
   # Search over all allocations up to budget for each player.
   for y1 in range(budget + 1):
@@ -179,34 +179,42 @@ def inefficiency_from_gaussian_prior_differences(budget=10, num_draws=1000):
   mu_az_2_1 = mu_ay_1_1
 
   # Bargaining solution for 1's prior
-  # y1_opt_1, z1_opt_1, y2_opt_1, z2_opt_1 = \
-  #   nbs_for_independent_gaussan_priors(mu_ay_1_1, mu_ay_2_1, mu_az_1_1, mu_az_2_1, budget=budget, num_draws=num_draws)
+  solution_1 = \
+    nbs_for_independent_gaussan_priors(mu_ay_1_1, mu_ay_2_1, mu_az_1_1, mu_az_2_1, budget=budget, num_draws=num_draws)
+  if solution_1 is None:
+    return "Infeasible for player 1 prior"
+  else:
+    y1_opt_1, z1_opt_1, y2_opt_1, z2_opt_1 = \
+      solution_1['y1_opt'], solution_1['z1_opt'], solution_1['y2_opt'], solution_1['z2_opt']
 
-  # Bargaining solution for 2's prior, as mu_ay_1_2 varies
-  prior_differences = np.linspace(-5, 0, 10)
-  true_welfares = []
-  feasible_diffs = []  # Collect prior differences that have nonempty feasible sets
+    # Bargaining solution for 2's prior, as mu_ay_1_2 varies
+    prior_differences = np.linspace(-5, 0, 10)
+    true_welfares = []
+    feasible_diffs = []  # Collect prior differences that have nonempty feasible sets
 
-  for diff in prior_differences:
-    # Get player 2's prior at this difference
-    mu_ay_1_2 = mu_ay_1_1 + diff
-    mu_az_1_2 = 1
-    mu_ay_2_2 = mu_az_1_2
-    mu_az_2_2 = mu_ay_1_2
+    for diff in prior_differences:
+      # Get player 2's prior at this difference
+      mu_ay_1_2 = mu_ay_1_1 + diff
+      mu_az_1_2 = 1
+      mu_ay_2_2 = mu_az_1_2
+      mu_az_2_2 = mu_ay_1_2
 
-    # Get bargaining solution
-    solution = nbs_for_independent_gaussan_priors(mu_ay_1_2, mu_ay_2_2, mu_az_1_2, mu_az_2_2, budget=budget,
-                                                  num_draws=num_draws)
-    if solution is None:  # Solution is None if there is no action that is feasible for all types
-      pass
-    else:
-      feasible_diffs.append(diff)
-      # Compute true welfare, using player 1's prior, at the bargaining solution computed by each player
-      # true_welfare = independent_gaussian_nash_welfare(y1_opt_1, y2_opt_2, z1_opt_1, z2_opt_2, mu_ay_1_1, mu_ay_2_1,
-      #                                                  mu_az_1_1, mu_az_2_1, budget, num_draws=1000)
-      # true_welfares.append(true_welfare)
+      # Get bargaining solution
+      solution_2 = nbs_for_independent_gaussan_priors(mu_ay_1_2, mu_ay_2_2, mu_az_1_2, mu_az_2_2, budget=budget,
+                                                    num_draws=num_draws)
+      if solution_2 is None:  # Solution is None if there is no action that is feasible for all types
+        pass
+      else:
+        feasible_diffs.append(diff)
 
-  return feasible_diffs
+        # Compute true welfare, using player 1's prior, at the bargaining solution computed by each player
+        y1_opt_2, z1_opt_2, y2_opt_2, z2_opt_2 = \
+          solution_2['y1_opt'], solution_2['z1_opt'], solution_2['y2_opt'], solution_2['z2_opt']
+        true_welfare = independent_gaussian_nash_welfare(y1_opt_1, y2_opt_2, z1_opt_1, z2_opt_2, mu_ay_1_1, mu_ay_2_1,
+                                                         mu_az_1_1, mu_az_2_1, budget, num_draws=1000)
+        true_welfares.append(true_welfare)
+
+    return feasible_diffs, true_welfares
 
 
 if __name__ == "__main__":
