@@ -35,8 +35,8 @@ def log_utility(yi, ymi, zi, zmi, ay_i, ay_mi, az_i, az_mi, budget):
   """
   i_prefers_y = ay_i > az_i
   mi_prefers_y = ay_mi > az_mi
-  utility_ = ay_i*(yi + ymi + yi*i_prefers_y + ymi*mi_prefers_y) \
-             + az_i*(zi + zmi + zi*(1-i_prefers_y) + zmi*(1-mi_prefers_y))
+  utility_ = ay_i*(yi + ymi + yi*(1-i_prefers_y) + ymi*(1-mi_prefers_y)) \
+             + az_i*(zi + zmi + zi*i_prefers_y + zmi*mi_prefers_y)
 
   # Get the best players could do without trade, to form disagreement point
   # (Recall that players can make twice as much of the resource that they value less)
@@ -72,10 +72,10 @@ def independent_gaussian_nash_welfare(y1, y2, z1, z2, mu_ay_1, mu_ay_2, mu_az_1,
   :param num_draws:
   :return:
   """
-  ay_1_prior_draws = np.random.normal(loc=mu_ay_1, size=num_draws)
-  az_1_prior_draws = np.random.normal(loc=mu_az_1, size=num_draws)
-  ay_2_prior_draws = np.random.normal(loc=mu_ay_2 , size=num_draws)
-  az_2_prior_draws = np.random.normal(loc=mu_az_2, size=num_draws)
+  ay_1_prior_draws = np.random.normal(loc=mu_ay_1, scale=0.1, size=num_draws)
+  az_1_prior_draws = np.random.normal(loc=mu_az_1, scale=0.1, size=num_draws)
+  ay_2_prior_draws = np.random.normal(loc=mu_ay_2, scale=0.1, size=num_draws)
+  az_2_prior_draws = np.random.normal(loc=mu_az_2, scale=0.1, size=num_draws)
 
   player_1_welfare_at_each_draw = np.array([log_utility(y1, y2, z1, z2, ay_1, ay_2, az_1, az_2, budget)
                                             for ay_1, ay_2, az_1, az_2
@@ -105,26 +105,53 @@ def nbs_for_independent_gaussan_priors(mu_ay_1, mu_ay_2, mu_az_1, mu_az_2, budge
   :param mu_az_1:
   :param mu_az_2:
   :param budget:
-  :param num_draws:
+  :param num_draws: 3 files changed, 287 insertions(+), 61 deletions(-)
+jclifto@laber-gpu02:~/bayesRL/src/hypothesis_test$ python3 cb_hypothesis_test.py
+{'type1': None, 'type2': 0.82}
+jclifto@laber-gpu02:~/bayesRL/src/hypothesis_test$
+
   :return:
   """
   optimal_welfare = -float('inf')
   y1_opt = None
   y2_opt = None
 
+  # Draw from prior over types
+  ay_1_prior_draws = np.random.normal(loc=mu_ay_1, scale=0.1, size=num_draws)
+  az_1_prior_draws = np.random.normal(loc=mu_az_1, scale=0.1, size=num_draws)
+  ay_2_prior_draws = np.random.normal(loc=mu_ay_2, scale=0.1, size=num_draws)
+  az_2_prior_draws = np.random.normal(loc=mu_az_2, scale=0.1, size=num_draws)
+
   # Search over all allocations up to budget for each player.
   for y1 in range(budget + 1):
     z1 = budget - y1
     for y2 in range(budget + 1):
       z2 = budget - y2
-      nash_welfare_ = independent_gaussian_nash_welfare(y1, y2, z1, z2, mu_ay_1, mu_ay_2, mu_az_1, mu_az_2, budget,
-                                                        num_draws=num_draws)
-      if nash_welfare_ > optimal_welfare:
-        optimal_welfare = nash_welfare_
-        y1_opt = y1
-        y2_opt = y2
 
-  return y1_opt, y2_opt, budget - y1_opt, budget - y2_opt
+      # Check that the action is feasible for all types
+      player_1_welfare_at_each_draw = np.array([log_utility(y1, y2, z1, z2, ay_1, ay_2, az_1, az_2, budget)
+                                                for ay_1, ay_2, az_1, az_2
+                                                in zip(ay_1_prior_draws, ay_2_prior_draws, az_1_prior_draws,
+                                                       az_2_prior_draws)])
+      player_2_welfare_at_each_draw = np.array([log_utility(y2, y1, z2, z1, ay_2, ay_1, az_2, az_1, budget)
+                                                for ay_2, ay_1, az_2, az_1
+                                                in zip(ay_2_prior_draws, ay_1_prior_draws, az_2_prior_draws,
+                                                       az_1_prior_draws)])
+
+      # If feasible for all types, compute nash welfare; otherwise, throw out this action
+      if np.sum(player_2_welfare_at_each_draw == 0) == 0 and np.sum(player_1_welfare_at_each_draw == 0) == 0:
+        nash_welfare_ = np.mean(player_1_welfare_at_each_draw) + np.mean(player_2_welfare_at_each_draw)
+        if nash_welfare_ > optimal_welfare:
+          optimal_welfare = nash_welfare_
+          y1_opt = y1
+          y2_opt = y2
+      else:
+        continue
+
+  if y1_opt is None:
+    return None
+  else:
+    return {'y1_opt': y1_opt, 'y2_opt': y2_opt, 'z1_opt': budget - y1_opt, 'z2_opt': budget - y2_opt}
 
 
 def inefficiency_from_gaussian_prior_differences(budget=10, num_draws=1000):
@@ -152,35 +179,39 @@ def inefficiency_from_gaussian_prior_differences(budget=10, num_draws=1000):
   mu_az_2_1 = mu_ay_1_1
 
   # Bargaining solution for 1's prior
-  y1_opt_1, z1_opt_1, y2_opt_1, z2_opt_1 = \
-    nbs_for_independent_gaussan_priors(mu_ay_1_1, mu_ay_2_1, mu_az_1_1, mu_az_2_1, budget=budget, num_draws=num_draws)
+  # y1_opt_1, z1_opt_1, y2_opt_1, z2_opt_1 = \
+  #   nbs_for_independent_gaussan_priors(mu_ay_1_1, mu_ay_2_1, mu_az_1_1, mu_az_2_1, budget=budget, num_draws=num_draws)
 
   # Bargaining solution for 2's prior, as mu_ay_1_2 varies
-  prior_differences = np.linspace(-2, 2, 5)
+  prior_differences = np.linspace(-5, 0, 10)
   true_welfares = []
+  feasible_diffs = []  # Collect prior differences that have nonempty feasible sets
+
   for diff in prior_differences:
-    print(diff)
+    # Get player 2's prior at this difference
     mu_ay_1_2 = mu_ay_1_1 + diff
     mu_az_1_2 = 1
     mu_ay_2_2 = mu_az_1_2
     mu_az_2_2 = mu_ay_1_2
-    y1_opt_2, y2_opt_2, z1_opt_2, z2_opt_2 = \
-      nbs_for_independent_gaussan_priors(mu_ay_1_2, mu_ay_2_2, mu_az_1_2, mu_az_2_2, budget=budget, num_draws=num_draws)
 
-    # Compute true welfare, using player 1's prior, at the bargaining solution computed by each player
-    true_welfare = independent_gaussian_nash_welfare(y1_opt_1, y2_opt_2, z1_opt_1, z2_opt_2, mu_ay_1_1, mu_ay_2_1,
-                                                     mu_az_1_1, mu_az_2_1, budget, num_draws=1000)
-    true_welfares.append(true_welfare)
+    # Get bargaining solution
+    solution = nbs_for_independent_gaussan_priors(mu_ay_1_2, mu_ay_2_2, mu_az_1_2, mu_az_2_2, budget=budget,
+                                                  num_draws=num_draws)
+    if solution is None:  # Solution is None if there is no action that is feasible for all types
+      pass
+    else:
+      feasible_diffs.append(diff)
+      # Compute true welfare, using player 1's prior, at the bargaining solution computed by each player
+      # true_welfare = independent_gaussian_nash_welfare(y1_opt_1, y2_opt_2, z1_opt_1, z2_opt_2, mu_ay_1_1, mu_ay_2_1,
+      #                                                  mu_az_1_1, mu_az_2_1, budget, num_draws=1000)
+      # true_welfares.append(true_welfare)
 
-  # Display true welfare as a function of prior difference
-  plt.plot(prior_differences, true_welfares)
-  plt.show()
-
-  return
+  return feasible_diffs
 
 
 if __name__ == "__main__":
-  inefficiency_from_gaussian_prior_differences()
+  np.random.seed(3)
+  print(inefficiency_from_gaussian_prior_differences())
 
 
 
