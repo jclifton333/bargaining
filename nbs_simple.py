@@ -9,7 +9,9 @@ they can make x units of the resource they value more and 2*(B - x) units of the
 for x in {0, 1, ..., B}.
 
 The bargaining solution is given by
-argmax_{y, z} \int log{ a^y_t1 * (y_1 + y_2) + a^z_t1 * (z1 + z2) } dP(t1) # ToDo: currently lacks disagreement pt.
+# ToDo: currently lacks disagreement pt.
+# ToDo: changing to nonlinear utility fns.
+argmax_{y, z} \int log{ a^y_t1 * (y_1 + y_2) + a^z_t1 * (z1 + z2) } dP(t1)
             + \int log{ a^y_t2 * (y_1 + y_2) + a^z_t2 * (z1 + z2) } dP(t2)
 
 where P is the prior over types.
@@ -33,24 +35,18 @@ def log_utility(yi, ymi, zi, zmi, ay_i, ay_mi, az_i, az_mi, budget):
   :param az_mi: Coefficient of z in -i's utility function.
   :return:
   """
-  i_prefers_y = ay_i > az_i
-  mi_prefers_y = ay_mi > az_mi
-  utility_ = ay_i*(yi + ymi + yi*(1-i_prefers_y) + ymi*(1-mi_prefers_y)) \
-             + az_i*(zi + zmi + zi*i_prefers_y + zmi*mi_prefers_y)
+  utility_ = ay_i*(yi + ymi) + az_i*(zi + zmi)
 
   # Get the best players could do without trade, to form disagreement point
-  # (Recall that players can make twice as much of the resource that they value less)
-  value_from_is_unilateral_action = \
-    budget*max((ay_i + ay_i*(ay_i <= az_i), az_i + az_i*(az_i < ay_i)))
-  if mi_prefers_y:
-    mi_chooses_y = 2*az_mi <= ay_mi
-    value_from_mis_unilateral_action = budget*(ay_i*mi_chooses_y + 2*az_i*(1-mi_chooses_y))
-  else:
-    mi_chooses_y = 2*ay_mi > az_mi
-    value_from_mis_unilateral_action = budget*(2*ay_i*mi_chooses_y + az_i*(1-mi_chooses_y))
+  player_i_disagreement_y = np.argmax([y**ay_i + (budget - y)**az_i for y in range(budget + 1)])
+  player_i_disagreement_z = budget - player_i_disagreement_y
+  player_mi_disagreement_y = np.argmax([y**ay_mi + (budget - y)**az_mi for y in range(budget + 1)])
+  player_mi_dmisagreement_z = budget - player_mi_disagreement_y
 
   # Compute disagreement and surplus
-  disagreement_point = value_from_is_unilateral_action + value_from_mis_unilateral_action
+  disagreement_point = \
+    (player_i_disagreement_y + player_mi_disagreement_y)**ay_i + \
+    (player_i_disagreement_z + player_mi_dmisagreement_z)**az_i
   surplus_utility = utility_ - disagreement_point
   if surplus_utility > 0:
     return np.log(surplus_utility + 1)
