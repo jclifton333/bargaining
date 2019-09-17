@@ -93,6 +93,14 @@ def independent_gaussian_nash_welfare(y1, y2, z1, z2, mu_ay_1, mu_ay_2, mu_az_1,
     return -float('inf')
 
 
+def expected_log_utility_at_type(y_i, z_i, ay_i, az_i, ay_mi_prior_draws, az_mi_prior_draws, budget=5, num_draws=1000):
+  log_u = 0.0
+  for ay_mi, az_mi in zip(ay_mi_prior_draws, az_mi_prior_draws):
+    y_mi, z_mi = alpha_map[(ay_mi, z_mi)]   # ToDo: pass alpha_map
+    u_ti = (y_i + y_mi)**az_i+ (z_i + z_mi)**az_i
+    log_u += np.log(u_ti - disagreement_pt_i) # ToDo: compute disagreement pt
+
+
 def get_all_multinomial_strategy_profiles(ay_list, az_list, budget):
   strategy_profiles_dict = {}
   type_space = itertools.product(ay_list, az_list)  # ToDo: dont need to do this multiple times
@@ -126,10 +134,11 @@ def nbs_for_independent_multinom_priors(ay_list, az_list, p_ay_1, p_ay_2, p_az_1
   az_2_prior_draws = np.random.choice(az_list, p_az_2, size=num_draws)
 
   # Search over strategy profiles alpha: (ay, az) -> (y, z)
+  # for Nash bargaining soln
   best_utility = -float('inf')
   best_alpha = None
   for alpha, alpha_map in strategy_profiles.items():
-    # Compute contribution from player 1
+    # Compute contribution from  player 1
     u_t1 = 0.0
     for t1 in zip(ay_1_prior_draws, az_1_prior_draws):
       y_t1, z_t1, EU_t1_alpha, d_t1 = alpha_map(t1)
@@ -143,6 +152,7 @@ def nbs_for_independent_multinom_priors(ay_list, az_list, p_ay_1, p_ay_2, p_az_1
       u_t2 += log(EU_t2_alpha - d_t2)
     u_t2 /= num_draws
 
+    # Update optimal strategy profile
     total_utility_at_alpha = u_t1 + u_t2
     if total_utility_at_alpha > best_utility:
       best_utility = total_utility_at_alpha
