@@ -19,6 +19,7 @@ where P is the prior over types.
 import numpy as np
 import matplotlib.pyplot as plt
 import pdb
+import itertools
 
 
 def log_utility(yi, ymi, zi, zmi, ay_i, ay_mi, az_i, az_mi, budget):
@@ -92,6 +93,64 @@ def independent_gaussian_nash_welfare(y1, y2, z1, z2, mu_ay_1, mu_ay_2, mu_az_1,
     return -float('inf')
 
 
+def get_all_multinomial_strategy_profiles(ay_list, az_list, budget):
+  strategy_profiles_dict = {}
+  type_space = itertools.product(ay_list, az_list)  # ToDo: dont need to do this multiple times
+  number_of_types = len(ay_list)*len(az_list)
+  strategy_profiles = itertools.combinations_with_replacement(budget, number_of_types)
+  for alpha in strategy_profiles:
+    # ToDo: also compute EU_t(\alpha | t) and disagreement pt here - need prior
+    strategy_profiles_dict[alpha] = {t: (y, budget-y) for t, y in zip(type_space, alpha)}
+  return strategy_profiles_dict
+
+
+def nbs_for_independent_multinom_priors(ay_list, az_list, p_ay_1, p_ay_2, p_az_1, p_az_2, budget=5, num_draws=1000):
+  """
+
+  :param ay_list: Vector of possible coefs ay.
+  :param az_list: Vector of possible coefs az.
+  :param p_ay_1: Prior over player 1's ay (probability vec. length ay)
+  :param p_ay_2:
+  :param p_az_1:
+  :param p_az_2:
+  :param budget:
+  :param num_draws:
+  :return:
+  """
+  strategy_profiles = get_all_multinomial_strategy_profiles(ay_list, az_list, budget)
+
+  # Draw from prior over types
+  ay_1_prior_draws = np.random.choice(ay_list, p_ay_1, size=num_draws)
+  ay_2_prior_draws = np.random.choice(ay_list, p_ay_2, size=num_draws)
+  az_1_prior_draws = np.random.choice(az_list, p_az_1, size=num_draws)
+  az_2_prior_draws = np.random.choice(az_list, p_az_2, size=num_draws)
+
+  # Search over strategy profiles alpha: (ay, az) -> (y, z)
+  best_utility = -float('inf')
+  best_alpha = None
+  for alpha, alpha_map in strategy_profiles.items():
+    # Compute contribution from player 1
+    u_t1 = 0.0
+    for t1 in zip(ay_1_prior_draws, az_1_prior_draws):
+      y_t1, z_t1, EU_t1_alpha, d_t1 = alpha_map(t1)
+      u_t1 += log(EU_t1_alpha - d_t1)
+    u_t1 /= num_draws
+
+    # Compute contribution from player 2
+    u_t2 = 0.0
+    for t2 in zip(ay_2_prior_draws, az_2_prior_draws):
+      y_t2, z_t2, EU_t2_alpha, d_t2 = alpha_map(t2)
+      u_t2 += log(EU_t2_alpha - d_t2)
+    u_t2 /= num_draws
+
+    total_utility_at_alpha = u_t1 + u_t2
+    if total_utility_at_alpha > best_utility:
+      best_utility = total_utility_at_alpha
+      best_alpha = alpha
+
+  return
+
+
 def nbs_for_independent_gaussan_priors(mu_ay_1, mu_ay_2, mu_az_1, mu_az_2, budget=10, num_draws=1000):
   """
   Compute NBS for independent gaussian priors over utility coefficients, when each player can create
@@ -102,10 +161,7 @@ def nbs_for_independent_gaussan_priors(mu_ay_1, mu_ay_2, mu_az_1, mu_az_2, budge
   :param mu_az_1:
   :param mu_az_2:
   :param budget:
-  :param num_draws: 3 files changed, 287 insertions(+), 61 deletions(-)
-jclifto@laber-gpu02:~/bayesRL/src/hypothesis_test$ python3 cb_hypothesis_test.py
-{'type1': None, 'type2': 0.82}
-jclifto@laber-gpu02:~/bayesRL/src/hypothesis_test$
+  :param num_draws:
 
   :return:
   """
@@ -136,6 +192,7 @@ jclifto@laber-gpu02:~/bayesRL/src/hypothesis_test$
                                                        az_1_prior_draws)])
 
       # If feasible for all types, compute nash welfare; otherwise, throw out this action
+      pdb.set_trace()
       if np.sum(player_2_welfare_at_each_draw == 0) == 0 and np.sum(player_1_welfare_at_each_draw == 0) == 0:
         nash_welfare_ = np.mean(player_1_welfare_at_each_draw) + np.mean(player_2_welfare_at_each_draw)
         if nash_welfare_ > optimal_welfare:
