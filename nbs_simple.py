@@ -35,19 +35,20 @@ def log_utility(yi, ymi, zi, zmi, ay_i, ay_mi, az_i, az_mi, budget):
   :param az_mi: Coefficient of z in -i's utility function.
   :return:
   """
-  utility_ = ay_i*(yi + ymi) + az_i*(zi + zmi)
+  utility_ = (yi + ymi)**ay_i + (zi + zmi)**az_i
 
   # Get the best players could do without trade, to form disagreement point
   player_i_disagreement_y = np.argmax([y**ay_i + (budget - y)**az_i for y in range(budget + 1)])
   player_i_disagreement_z = budget - player_i_disagreement_y
   player_mi_disagreement_y = np.argmax([y**ay_mi + (budget - y)**az_mi for y in range(budget + 1)])
-  player_mi_dmisagreement_z = budget - player_mi_disagreement_y
+  player_mi_disagreement_z = budget - player_mi_disagreement_y
 
   # Compute disagreement and surplus
   disagreement_point = \
     (player_i_disagreement_y + player_mi_disagreement_y)**ay_i + \
-    (player_i_disagreement_z + player_mi_dmisagreement_z)**az_i
+    (player_i_disagreement_z + player_mi_disagreement_z)**az_i
   surplus_utility = utility_ - disagreement_point
+
   if surplus_utility > 0:
     return np.log(surplus_utility + 1)
   else:
@@ -113,10 +114,10 @@ jclifto@laber-gpu02:~/bayesRL/src/hypothesis_test$
   y2_opt = None
 
   # Draw from prior over types
-  ay_1_prior_draws = np.random.normal(loc=mu_ay_1, scale=0.5, size=num_draws)
-  az_1_prior_draws = np.random.normal(loc=mu_az_1, scale=0.5, size=num_draws)
-  ay_2_prior_draws = np.random.normal(loc=mu_ay_2, scale=0.5, size=num_draws)
-  az_2_prior_draws = np.random.normal(loc=mu_az_2, scale=0.5, size=num_draws)
+  ay_1_prior_draws = np.random.normal(loc=mu_ay_1, scale=0.1, size=num_draws)
+  az_1_prior_draws = np.random.normal(loc=mu_az_1, scale=0.1, size=num_draws)
+  ay_2_prior_draws = np.random.normal(loc=mu_ay_2, scale=0.1, size=num_draws)
+  az_2_prior_draws = np.random.normal(loc=mu_az_2, scale=0.1, size=num_draws)
 
   # Search over all allocations up to budget for each player.
   for y1 in range(budget + 1):
