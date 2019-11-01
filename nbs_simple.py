@@ -96,7 +96,7 @@ def independent_gaussian_nash_welfare(y1, y2, z1, z2, mu_ay_1, mu_ay_2, mu_az_1,
 def expected_log_utility_at_type(y_i, z_i, ay_i, az_i, ay_mi_prior_draws, az_mi_prior_draws, budget=5, num_draws=1000):
   log_u = 0.0
   for ay_mi, az_mi in zip(ay_mi_prior_draws, az_mi_prior_draws):
-    y_mi, z_mi = alpha_map[(ay_mi, z_mi)]   # ToDo: pass alpha_map
+    y_mi, z_mi = alpha_map[(ay_mi, az_mi)]   # ToDo: pass alpha_map
     u_ti = (y_i + y_mi)**az_i+ (z_i + z_mi)**az_i
     log_u += np.log(u_ti - disagreement_pt_i) # ToDo: compute disagreement pt
 
