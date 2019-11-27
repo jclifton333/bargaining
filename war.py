@@ -117,12 +117,16 @@ def mixed_strategy_disagreement(max_army_1, max_army_2, max_navy_1, max_navy_2, 
   # Collect into payoff matrices
   player_1_payoffs = [[CC_1, CD_1], [DC_1, DD_1]]
   player_2_payoffs = [[CC_2, CD_2], [DC_2, DD_2]]
+  display_matrix = [[(CC_1, CC_2), (CD_1, CD_2)], [(DC_1, DC_2), (DD_1, DD_2)]]
+  print(display_matrix)
 
   # Compute and display equilibria
   game = nash.Game(player_1_payoffs, player_2_payoffs)
 
   # ToDo: assuming last eq is mixed!
   game_values = [game[eq] for eq in game.support_enumeration()][-1]
+  game_profiles = [eq for eq in game.support_enumeration()]
+  print(game_profiles)
   return game_values
 
 
@@ -131,3 +135,13 @@ if __name__ == "__main__":
   ALLIANCE_NAVY = 24 + 7 + 3
   ENTENTE_ARMY = 11 + 2.1 + 5.8
   ENTENTE_NAVY = 17 + 39 + 22
+  territory = np.ones(3)
+  loss_coef_1 = 0.1
+  loss_coef_2 = 0.1
+  mutual_defect_penalty_1 = -30
+  mutual_defect_penalty_2 = -30
+  beta_1 = np.ones(5)
+  beta_2 = np.ones(5)
+  mixed_strategy_disagreement(ALLIANCE_ARMY, ENTENTE_ARMY, ALLIANCE_NAVY, ENTENTE_NAVY, territory, beta_1, beta_2,
+                              loss_coef_1, loss_coef_2, mutual_defect_penalty_1, mutual_defect_penalty_2)
+
