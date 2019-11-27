@@ -124,3 +124,10 @@ def mixed_strategy_disagreement(max_army_1, max_army_2, max_navy_1, max_navy_2, 
   # ToDo: assuming last eq is mixed!
   game_values = [game[eq] for eq in game.support_enumeration()][-1]
   return game_values
+
+
+if __name__ == "__main__":
+  ALLIANCE_ARMY = 6 + 3.6 + 2.2
+  ALLIANCE_NAVY = 24 + 7 + 3
+  ENTENTE_ARMY = 11 + 2.1 + 5.8
+  ENTENTE_NAVY = 17 + 39 + 22
