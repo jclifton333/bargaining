@@ -63,15 +63,20 @@ def adaptive_strategy(p_list_1, p_list_2, n_split=40, n_rep=40):
   p1_avg = (p1_1 + p2_1) / 2
   p2_avg = (p2_1 + p2_2) / 2
 
-  if averaging_is_better_1:
-    a1 = get_welfare_optimal_eq(nash.Game(p1_avg, p2_avg))[0]
+  # if averaging_is_better_1:
+  #   a1 = get_welfare_optimal_eq(nash.Game(p1_avg, p2_avg))[0]
+  # else:
+  #   a1 = get_welfare_optimal_eq(nash.Game(p1_1, p2_1))[0]
+  # if averaging_is_better_2:
+  #   a2 = get_welfare_optimal_eq(nash.Game(p1_avg, p2_avg))[1]
+  # else:
+  #   a2 = get_welfare_optimal_eq(nash.Game(p1_2, p2_2))[1]
+
+  if averaging_is_better_1 and averaging_is_better_2:
+    a1, a2, _ = get_welfare_optimal_eq(nash.Game(p1_avg, p2_avg))
   else:
     a1 = get_welfare_optimal_eq(nash.Game(p1_1, p2_1))[0]
-  if averaging_is_better_2:
-    a2 = get_welfare_optimal_eq(nash.Game(p1_avg, p2_avg))[1]
-  else:
     a2 = get_welfare_optimal_eq(nash.Game(p1_2, p2_2))[1]
-
   return a1, a2, mean_diff_1, mean_diff_2
 
 
@@ -94,6 +99,7 @@ def compare_perturbed_games(p1, p2, loc=0., scale=0.3, bias_direction=1, player_
   a2 = get_welfare_optimal_eq(nash.Game(p1_2, p2_2))[1]
   a1_avg, a2_avg, _ = get_welfare_optimal_eq(nash.Game(p1_avg, p2_avg))
 
+  # ToDo: Think more about justification for deciding based on this quantity
   v1_ind_ = expected_payoffs(p1, p2, a1, a2)[player_ix]
   v1_avg_ = expected_payoffs(p1, p2, a1_avg, a2_avg)[player_ix]
   return v1_avg_ - v1_ind_
@@ -147,7 +153,7 @@ if __name__ == "__main__":
 
       # Get true difference
       v1_ind, v2_ind = expected_payoffs(p1, p2, a1_ind, a2_ind)
-      v1_avg, v2_ag = expected_payoffs(p1, p2, a1_avg, a2_avg)
+      v1_avg, v2_avg = expected_payoffs(p1, p2, a1_avg, a2_avg)
       true_diff = v1_avg - v1_ind
 
       # Get estimated difference
