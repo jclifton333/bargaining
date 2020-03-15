@@ -24,18 +24,22 @@ def expected_payoffs(p1, p2, a1, a2):
   return v1, v2
 
 
-def split_and_compare_perturbed_games(p_list, n_split=10, n_rep=10):
+def split_and_compare_perturbed_games(p_list, n_split=10, n_rep=50):
+  n_obs = len(p_list)
   mean_diffs = []
   for _ in range(n_split):
-    p_split = np.random.choice(p_list, len(p_list), replace=True)
+    split_indices = np.random.choice(len(p_list), len(p_list), replace=True)
+    p_split = [p_list[ix] for ix in split_indices]
     p1_split, p2_split, p1_split_mean, p2_split_mean = get_payoffs_from_list(p_split)
     scale = np.mean((np.mean(np.std(p1_split, axis=0)), np.mean(np.std(p2_split, axis=0))))
+    # scale = 1. # ToDo: passing true scale for debugging
     diffs = []
     for rep in range(n_rep):
-      diff = compare_perturbed_games(p1_split_mean, p2_split_mean, scale=scale)
+      diff = compare_perturbed_games(p1_split_mean, p2_split_mean, scale=scale / np.sqrt(n_obs))
       diffs.append(diff)
-    mean_diffs.append(diffs)
-  return mean_diff > 0
+    mean_diffs.append(np.mean(diffs))
+  mean_diff = np.mean(mean_diffs)
+  return mean_diff
 
 
 def get_payoffs_from_list(p_list):
@@ -46,11 +50,13 @@ def get_payoffs_from_list(p_list):
   return p1, p2, p1_mean, p2_mean
 
 
-def adaptive_strategy(p_list_1, p_list_2, n_split=10, n_rep=10):
-  averaging_is_better_1 = split_and_compare_perturbed_games(p_list_1, n_split=n_split, n_rep=n_rep)
-  averaging_is_better_2 = split_and_compare_perturbed_games(p_list_2, n_split=n_split, n_rep=n_rep)
+def adaptive_strategy(p_list_1, p_list_2, n_split=10, n_rep=100):
+  mean_diff_1 = split_and_compare_perturbed_games(p_list_1, n_split=n_split, n_rep=n_rep)
+  mean_diff_2 = split_and_compare_perturbed_games(p_list_2, n_split=n_split, n_rep=n_rep)
+  averaging_is_better_1 = mean_diff_1 > 0
+  averaging_is_better_2 = mean_diff_2 > 0
   _, _, p1_1, p2_1 = get_payoffs_from_list(p_list_1)
-  _, _, p2_1, p2_2 = get_payoffs_from_list(p_list_2)
+  _, _, p1_2, p2_2 = get_payoffs_from_list(p_list_2)
   p1_avg = (p1_1 + p2_1) / 2
   p2_avg = (p2_1 + p2_2) / 2
 
@@ -63,7 +69,7 @@ def adaptive_strategy(p_list_1, p_list_2, n_split=10, n_rep=10):
   else:
     a2 = get_welfare_optimal_eq(nash.Game(p1_2, p2_2))[1]
 
-  return a1, a2
+  return a1, a2, mean_diff_1, mean_diff_2
 
 
 def compare_perturbed_games(p1, p2, loc=0., scale=0.3, bias_direction=1):
@@ -83,10 +89,9 @@ def compare_perturbed_games(p1, p2, loc=0., scale=0.3, bias_direction=1):
   a2 = get_welfare_optimal_eq(nash.Game(p1_2, p2_2))[1]
   a1_avg, a2_avg, _ = get_welfare_optimal_eq(nash.Game(p1_avg, p2_avg))
 
-  payoffs_hyper = expected_payoffs(p1, p2, a1, a2)
-  payoffs_avg = expected_payoffs(p1, p2, a1_avg, a2_avg)
-
-  return payoffs_avg[0] - payoffs_hyper[0]
+  v1_ind_ = expected_payoffs(p1, p2, a1, a2)[0]
+  v1_avg_ = expected_payoffs(p1, p2, a1_avg, a2_avg)[0]
+  return v1_avg_ - v1_ind_
 
 
 def get_random_eq(game_res):
@@ -97,21 +102,53 @@ def get_random_eq(game_res):
 if __name__ == "__main__":
   # ToDo: implement adaptive (bootstrap) procedure
   # ToDo: version with both private and public signal
-  GEN_SCALE = 1.
-  NOISE_SCALE = 10
+  GEN_SCALE = 1
+  NOISE_SCALE = 3
   NOISE_BIAS = 0.0
+  N_OBS = 20
   BIAS_FLIP_DIRECTION = 1  # Player 1 bias=NOISE_BIAS; Player 2 bias=BIAS_FLIP_DIRECTION*NOISE_BIAS
 
-  num_games = 20
-  num_reps = 200
+  num_games = 10
+  num_reps = 50
 
   for i in range(num_games):
     diffs_i = []
+    errors_i = []
     p1 = np.random.normal(size=(2, 2), scale=GEN_SCALE)
     p2 = np.random.normal(size=(2, 2), scale=GEN_SCALE)
     for j in range(num_reps):
-      diff = compare_perturbed_games(p1, p2, loc=NOISE_BIAS, scale=NOISE_SCALE, bias_direction=BIAS_FLIP_DIRECTION)
-      diffs_i.append(diff)
+      # Obs for player 1
+      p1_1_list = [np.random.normal(loc=p1, scale=NOISE_SCALE) for obs in range(N_OBS)]
+      p2_1_list = [np.random.normal(loc=p2, scale=NOISE_SCALE) for obs in range(N_OBS)]
+      p_list_1 = list(zip(p1_1_list, p2_1_list))
+      # Obs for player 2
+      p1_2_list = [np.random.normal(loc=p1, scale=NOISE_SCALE) for obs in range(N_OBS)]
+      p2_2_list = [np.random.normal(loc=p2, scale=NOISE_SCALE) for obs in range(N_OBS)]
+      p_list_2 = list(zip(p1_2_list, p2_2_list))
+
+      a1_adapt, a2_adapt, est_diff_1, est_diff_2 = adaptive_strategy(p_list_1, p_list_2)
+      v1_adapt, v2_adapt = expected_payoffs(p1, p2, a1_adapt, a2_adapt)
+
+      # ToDo: redundant, can be optimized
+      p1_1_mean = np.mean(p1_1_list, axis=0)
+      p2_1_mean = np.mean(p2_1_list, axis=0)
+      p1_2_mean = np.mean(p1_2_list, axis=0)
+      p2_2_mean = np.mean(p2_2_list, axis=0)
+      p1_avg = (p1_1_mean + p1_2_mean) / 2
+      p2_avg = (p2_1_mean + p2_2_mean) / 2
+      a1_ind = get_welfare_optimal_eq(nash.Game(p1_1_mean, p2_1_mean))[0]
+      a2_ind = get_welfare_optimal_eq(nash.Game(p1_2_mean, p2_2_mean))[1]
+      a1_avg, a2_avg, _ = get_welfare_optimal_eq(nash.Game(p1_avg, p2_avg))
+
+      # Get true difference
+      v1_ind, v2_ind = expected_payoffs(p1, p2, a1_ind, a2_ind)
+      v1_avg, v2_ag = expected_payoffs(p1, p2, a1_avg, a2_avg)
+      true_diff = v1_avg - v1_ind
+      error = est_diff_1 - true_diff
+      errors_i.append(error)
+      diffs_i.append(v1_adapt - v1_ind)
     print(np.mean(diffs_i))
+    plt.hist(errors_i)
+    plt.show()
   # plt.hist(diffs)
   # plt.show()
