@@ -120,7 +120,12 @@ if __name__ == "__main__":
   u_C u_D
   u_D u_D  
   
-  and testing whether u_C > u_D; thus giving a dominant strategy (with respect to these expectations). 
+  where C and D correspond to averaging and not-averaging. (Also be aware that we have assumed the player
+  commits to playing the equilibrium of the averaged game, if (C, C) is played. Assuming the players truthfully
+  report their observations, this can be seen as rational in the sense that the new game is a better estimate than
+  the one based on one's private obs, so trying to best-respond based on one's private obs is a bad idea.)
+  
+  and testing whether u_C > u_D; thus giving a weakly dominant strategy (with respect to these expectations). 
   Of course, this is still a hypergame and the estimates might be wrong, but we should try to prove
   that playing this hypergame is more robust than the original hypergame.
   """
