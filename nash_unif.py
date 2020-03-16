@@ -111,8 +111,20 @@ def get_random_eq(game_res):
 
 
 if __name__ == "__main__":
-  # ToDo: implement adaptive (bootstrap) procedure
   # ToDo: version with both private and public signal
+  # ToDo: implement threat game
+  # ToDo: implement heuristics for exploiting cooperators, and heuristics for punishing exploitation (penalizing by fit)
+  """
+  The method can be seen as creating a matrix with values for the row player of 
+  
+  u_C u_D
+  u_D u_D  
+  
+  and testing whether u_C > u_D; thus giving a dominant strategy (with respect to these expectations). 
+  Of course, this is still a hypergame and the estimates might be wrong, but we should try to prove
+  that playing this hypergame is more robust than the original hypergame.
+  """
+
   GEN_SCALE = 1
   NOISE_SCALE = np.array([[20., 20.], [0, 0]])
   NOISE_BIAS = 0.0
