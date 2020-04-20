@@ -13,7 +13,7 @@ Carry out = 1
 Give in = 1 
 """
 
-N = 20
+N = 30
 N_GAME_REPS = 500
 MEAN_CREDENCE = 0.07
 V_TA_GIVE = -1
