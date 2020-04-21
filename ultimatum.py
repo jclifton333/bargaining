@@ -1,5 +1,8 @@
 import numpy as np
 from scipy.optimize import minimize, Bounds
+from scipy.special import expit
+import pymc3 as pm
+import matplotlib.pyplot as plt
 import pdb
 
 
@@ -22,10 +25,56 @@ def simple_boltzmann_ll(r, splits, actions, temp=1.):
   for s, a in zip(splits, actions):
     u = s*r*temp
     if a:
-      log_lik += (u - (1 + np.exp(u)))
+      log_lik += (u - np.log(1 + np.exp(u)))
     else:
-      log_lik += 1 - (1 + np.exp(u))
+      log_lik += 1 - np.log(1 + np.exp(u))
   return -log_lik + r**2
+
+
+def model_uncertainty(splits, actions, temp=1.):
+  with pm.Model() as repeated_model:
+    r = pm.Normal('r', mu=0, sd=1)
+    p = pm.Gamma('p', alpha=1, beta=1)
+    t = pm.Uniform('t', lower=0, upper=0.5)
+    u_rej = (splits < 0.5-t)*p*r
+    u_acc = 2*splits*r
+    odds_rej = np.exp(u_rej)
+    odds_acc = np.exp(u_acc)
+    p = odds_acc / (odds_rej + odds_acc)
+    a = pm.Binomial('a', 1, p, observed=actions)
+    fitted = pm.fit(method='advi')
+    trace_repeated = pm.sample(2000)
+
+  # with pm.Model() as simple_model:
+  #   r = pm.Normal('r', mu=0, sd=1)
+  #   p = np.exp(r*splits) / (1 + np.exp(r*splits))
+  #   a = pm.Binomial('a', 1, p, observed=actions)
+  #   trace_simple = pm.sample(2000, init='map')
+
+  with pm.Model() as fairness_model:
+    r = pm.Normal('r', mu=0, sd=1)
+    t = pm.Uniform('t', lower=0, upper=0.5)
+    f = pm.Normal('f', mu=0, sd=1)
+    odds = np.exp(splits*r - f*(splits< 0.5-t))
+    p = odds / (1 + odds)
+    a = pm.Binomial('a', 1, p, observed=actions)
+    fitted = pm.fit(method='advi')
+    trace_fairness = fitted.sample(2000)
+
+  model_dict = dict(zip([fairness_model, repeated_model],
+                        [trace_fairness, trace_repeated]))
+  comp = pm.compare(model_dict, method='BB-pseudo-BMA')
+  return trace_fairness, trace_repeated, comp
+
+
+def simple_bayes(splits, actions, temp=1.):
+  with pm.Model() as model:
+    r = pm.Normal('r', mu=0, sd=1)
+    p = np.exp(r*splits) / (1 + np.exp(r*splits)) 
+    a = pm.Binomial('a', 1, p, observed=actions)
+    trace = pm.sample(20000, init='map')
+  return trace
+
 
 
 def fairness_boltzmann_ll(r, f, t, splits, actions, temp=1.):
@@ -36,9 +85,9 @@ def fairness_boltzmann_ll(r, f, t, splits, actions, temp=1.):
   for s, a in zip(splits, actions):
     u = temp*(s*r - f*(s< 0.5-t))
     if a:
-      log_lik += (u - (1 + np.exp(u)))
+      log_lik += (u - np.log(1 + np.exp(u)))
     else:
-      log_lik += 1 - (1 + np.exp(u))
+      log_lik += 1 - np.log(1 + np.exp(u))
   return -log_lik + r**2 + f**2 + t**2
 
 def repeated_ll(r, t, p, splits, actions, temp=1.):
@@ -49,12 +98,12 @@ def repeated_ll(r, t, p, splits, actions, temp=1.):
   """
   log_lik = 0.
   for s, a in zip(splits, actions):
-    u_rej = temp*(s < 0.5-t)*p
+    u_rej = temp*(s < 0.5-t)*p*r
     u_acc = temp*(2*s*r)
     if a:
-      log_lik += u_acc - (np.exp(u_rej) + np.exp(u_acc))
+      log_lik += u_acc - np.log(np.exp(u_rej) + np.exp(u_acc))
     else:
-      log_lik += u_rej - (np.exp(u_rej) + np.exp(u_acc))
+      log_lik += u_rej - np.log(np.exp(u_rej) + np.exp(u_acc))
   return -log_lik + r**2 + t**2 + p**2
 
 
@@ -77,15 +126,22 @@ def maximize_all_likelihoods(splits, actions, temp=1.):
   repeated_res = minimize(repeated,
                           x0=np.ones(3)*0.5,
                           method='trust-constr',
-                          bounds=Bounds([-1, -1, -1], [1, 1, 1]))
+                          bounds=Bounds([-1, -1, -3], [1, 1, 3]))
   print(simple_res.x[0], fairness_res.x[0], repeated_res.x[0])
+  # print(repeated_res.x)
   return
 
 
 if __name__ == "__main__":
-  real_policy = lambda s: s > 0.45
-  splits, actions = generate_ultimatum_data(real_policy)
-  maximize_all_likelihoods(splits, actions)
+  def real_policy(s):
+    num = np.exp(s -5*(s < 0.5)*(1-s)**2)
+    prob = num / (1 + num)
+    return np.random.binomial(1, p=prob)
+  # real_policy = lambda s: s > 0.4
+
+  splits, actions = generate_ultimatum_data(real_policy, n=50)
+  tf, tr, comp = model_uncertainty(splits, actions)
+  # maximize_all_likelihoods(splits, actions)
 
 
 
