@@ -43,7 +43,7 @@ def model_uncertainty(splits, actions, temp=1.):
     p = odds_acc / (odds_rej + odds_acc)
     a = pm.Binomial('a', 1, p, observed=actions)
     fitted = pm.fit(method='advi')
-    trace_repeated = pm.sample(2000)
+    trace_repeated = fitted.sample(2000)
 
   # with pm.Model() as simple_model:
   #   r = pm.Normal('r', mu=0, sd=1)
@@ -139,9 +139,34 @@ if __name__ == "__main__":
     return np.random.binomial(1, p=prob)
   # real_policy = lambda s: s > 0.4
 
-  splits, actions = generate_ultimatum_data(real_policy, n=50)
+  splits, actions = generate_ultimatum_data(real_policy, n=100)
   tf, tr, comp = model_uncertainty(splits, actions)
+
+  recommended_actions = []
+  evs = []
+  wf, wr = comp['weight']
+  s_range = np.linspace(0, 1, 20)
+  for s in s_range:
+    uf_0 = []
+    ur_0 = []
+    for pf in tf:
+      uf = pf['r']*s - pf['f']*(s< 0.5-pf['t'])
+      uf_0.append(uf)
+    for pr in tr:
+      ur = pr['r']*s
+      ur_0.append(ur)
+    ev = wf*np.mean(uf_0) + wr*np.mean(ur_0)
+    evs.append(ev)
+    recommended_actions.append(ev > 0)
+  plt.plot(s_range, evs)
+  plt.show()
+
+    
+
+
+
   # maximize_all_likelihoods(splits, actions)
+
 
 
 
