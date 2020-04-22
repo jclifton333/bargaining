@@ -4,6 +4,7 @@ from scipy.special import expit
 import pymc3 as pm
 import matplotlib.pyplot as plt
 import pdb
+from itertools import product
 
 
 def generate_ultimatum_data(policy, n=100):
@@ -32,6 +33,29 @@ def simple_boltzmann_ll(r, splits, actions, temp=1.):
   return -log_lik + r**2
 
 
+def big_model(splits, stakes, actions, p_prior='normal', c_prior='normal', sd=1.):
+  with pm.Model() as model:
+    r = pm.Gamma('r', alpha=1, beta=1)
+    if p_prior == 'normal':
+      p = pm.Normal('p', mu=0, sd=sd)
+    else:
+      p = pm.Gamma('p', alpha=1, beta=1)
+    t = pm.Beta('t', alpha=2, beta=5)
+    st = pm.Beta('st', alpha=1, beta=1)
+    if c_prior == 'normal':
+      c = pm.Normal('c', mu=0, sd=sd)
+    else:
+      c = pm.Gamma('c', alpha=1, beta=1)
+    f = pm.Normal('f', mu=0, sd=sd)
+    odds_a = np.exp(2*r*splits + c*stakes**st - f*(splits< 0.5-t/2))
+    odds_r = np.exp(p*(splits < 0.5-t/2))
+    p = odds_a / (odds_r + odds_a)
+    a = pm.Binomial('a', 1, p, observed=actions)
+    fitted = pm.fit(method='advi')
+    trace_big = fitted.sample(2000)
+    prior = pm.sample_prior_predictive(2000)
+  return trace_big, prior
+
 def model_uncertainty(splits, stakes, actions, temp=1., sd=1.):
   with pm.Model() as repeated_model:
     r = pm.Gamma('r', alpha=1, beta=1)
@@ -46,7 +70,6 @@ def model_uncertainty(splits, stakes, actions, temp=1., sd=1.):
     fitted = pm.fit(method='advi')
     trace_repeated = fitted.sample(2000)
     # trace_repeated = pm.sample(200000, step=pm.Slice(), chains=2, cores=4)
-
 
   # with pm.Model() as simple_model:
   #   r = pm.Normal('r', mu=0, sd=1)
@@ -145,48 +168,64 @@ if __name__ == "__main__":
   # see https://www.sas.upenn.edu/~cb36/files/2010_anem.pdf
   np.random.seed(3)
 
+  def real_ev(sp, st):
+    return st**(1/3)*sp - (0.4-sp)*(sp<0.4)
+
   def real_policy(sp, st):
-    num = np.exp(np.sqrt(st)*sp/2 + (sp >0.4))
+    num = np.exp(real_ev(sp, st))
     prob = num / (1 + num)
     return np.random.binomial(1, p=prob)
     # return s > 0.4
 
   splits, actions, stakes = generate_ultimatum_data(real_policy, n=100)
-  tf, tr, comp = model_uncertainty(splits, stakes, actions, sd=0.1, temp=5)
+  # tf, tr, comp = model_uncertainty(splits, stakes, actions, sd=0.1, temp=5)
+  tb_list = []
+  prior_list = []
+  sds_list = [0.01, 0.1, 1]
+  p_dbns_list = ['gamma', 'normal']
+  c_dbns_list = ['gamma', 'normal']
+  dbns_list = [(i, j) for i in p_dbns_list for j in c_dbns_list]
+  for dbn in dbns_list:
+    tb, prior = big_model(splits, stakes, actions, p_prior=dbn[0],
+                          c_prior=dbn[1], sd=0.1)
+    tb_list.append(tb)
+    prior_list.append(prior)
 
   recommended_actions = []
-  priors_f = np.linspace(0.0, 1.0, 11)
-  evs = [[] for _ in range(len(priors_f))]
-  offerer_evs = [[] for _ in range(len(priors_f))]
-  wf, wr = comp['weight']
-  posteriors_f = [pf*wf*(wf+wr) / (pf*wf*(wf+wr) + (1-pf)*wr*(wf+wr)) for pf in
-                  priors_f]
+  evs = [[] for _ in range(len(tb_list))]
+  evs_prior = [[] for _ in range(len(tb_list))]
   s_range = np.linspace(0, 1, 20)
+  scale = 1
   for s in s_range:
-    uf_0 = []
-    ur_0 = []
-    for pf in tf:
-      # TODO: make sure this matches current version of model
-      uf = pf['r']*s - pf['f']*(s< 0.5-pf['t']/2)
-      uf_0.append(uf)
-    for pr in tr:
-      ur = pr['r']*s
-      ur_0.append(ur)
-    for i, post_f in enumerate(posteriors_f):
-      post_dbn = post_f*np.array(uf_0) + (1-post_f)*np.array(ur_0)
-      evs[i].append(np.median(post_dbn))
-      offerer_evs[i].append((1-s)*np.mean(post_dbn > 0))
+    u_list = []
+    u_prior_list = []
+    for i, tb in enumerate(tb_list):
+      pri = prior_list[i]
+      for j, post in enumerate(tb):
+        # Get posterior expectations
+        u_a = 2*post['r']*s + post['c']*scale**post['st'] - post['f']*(s< 0.5-post['t']/2)
+        u_r = post['p']*(s < 0.5-post['t']/2)
+        u_diff = u_a - u_r
+        u_list.append(u_diff)
 
-  pm.traceplot(tr)
-  plt.show()
-  for prior, ev in zip(priors_f, offerer_evs):
-    plt.plot(s_range, ev, label=str(prior))
+        # Get prior expectations
+        u_a_pri = 2*pri['r'][j]*s + pri['c'][j]*scale**pri['st'][j] - \
+          pri['f'][j]*(s< 0.5-pri['t'][j]/2)
+        u_r_pri = pri['p'][j]*(s < 0.5-pri['t'][j]/2)
+        u_diff_pri = u_a_pri - u_r_pri
+        u_prior_list.append(u_diff_pri)
+
+      evs[i].append(np.mean(u_list))
+      evs_prior[i].append(np.mean(u_prior_list))
+
+  # pm.traceplot(tb_list[0])
+  # plt.show()
+  for prior, ev, ev_prior in zip(list(dbns_list), evs, evs_prior):
+    plt.plot(s_range, ev, label='{} post'.format(prior))
+    plt.plot(s_range, ev_prior, label='{} prior'.format(prior))
+  plt.plot(s_range, [real_ev(s, scale) for s in s_range], label='true')
   plt.legend()
   plt.show()
-
-    
-
-
 
   # maximize_all_likelihoods(splits, actions)
 
