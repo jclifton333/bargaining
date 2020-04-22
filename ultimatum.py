@@ -33,12 +33,11 @@ def simple_boltzmann_ll(r, splits, actions, temp=1.):
 
 def model_uncertainty(splits, actions, temp=1., sd=1.):
   with pm.Model() as repeated_model:
-    r = pm.Normal('r', mu=0, sd=sd)
-    # p = pm.Gamma('p', alpha=1, beta=1)
-    # t = pm.Beta('t', alpha=2, beta=5)
-    odds_a = np.exp(r*(splits > 0.4))
-    # odds_r = np.exp(p*(splits < 0.5-t/2))
-    odds_r = 1
+    r = pm.Gamma('r', alpha=1, beta=1)
+    p = pm.Gamma('p', alpha=1, beta=1)
+    t = pm.Beta('t', alpha=2, beta=5)
+    odds_a = np.exp(r*splits*(splits > 0.5-t))
+    odds_r = np.exp(p*(splits < 0.5-t/2))
     p = odds_a / (odds_r + odds_a)
     a = pm.Binomial('a', 1, p, observed=actions)
     fitted = pm.fit(method='advi')
@@ -53,7 +52,7 @@ def model_uncertainty(splits, actions, temp=1., sd=1.):
   #   trace_simple = pm.sample(2000, init='map')
 
   with pm.Model() as fairness_model:
-    r = pm.Normal('r', mu=0, sd=sd)
+    r = pm.Gamma('r', alpha=1, beta=1)
     t = pm.Beta('t', alpha=2, beta=5)
     f = pm.Normal('f', mu=0, sd=sd)
     b = pm.Normal('b', mu=0, sd=sd)
