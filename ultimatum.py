@@ -11,8 +11,9 @@ def generate_ultimatum_data(policy, n=100):
   :param policy: maps split to 0 (reject) or 1 (accept)
   """
   splits = np.random.uniform(size=n)
-  actions = [policy(s) for s in splits]
-  return splits, actions
+  stakes = np.random.lognormal(size=n)
+  actions = [policy(sp, st) for sp, st in zip(splits, stakes)]
+  return splits, actions, stakes
 
 
 def simple_boltzmann_ll(r, splits, actions, temp=1.):
@@ -31,12 +32,14 @@ def simple_boltzmann_ll(r, splits, actions, temp=1.):
   return -log_lik + r**2
 
 
-def model_uncertainty(splits, actions, temp=1., sd=1.):
+def model_uncertainty(splits, stakes, actions, temp=1., sd=1.):
   with pm.Model() as repeated_model:
     r = pm.Gamma('r', alpha=1, beta=1)
     p = pm.Gamma('p', alpha=1, beta=1)
     t = pm.Beta('t', alpha=2, beta=5)
-    odds_a = np.exp(2*r*splits)
+    st = pm.Beta('st', alpha=1, beta=1)
+    c = pm.Gamma('c', alpha=1, beta=1)
+    odds_a = np.exp(2*r*splits + c*stakes**st)
     odds_r = np.exp(p*(splits < 0.5-t/2))
     p = odds_a / (odds_r + odds_a)
     a = pm.Binomial('a', 1, p, observed=actions)
@@ -55,7 +58,9 @@ def model_uncertainty(splits, actions, temp=1., sd=1.):
     r = pm.Gamma('r', alpha=1, beta=1)
     t = pm.Beta('t', alpha=2, beta=5)
     f = pm.Normal('f', mu=0, sd=sd)
-    odds = np.exp(splits*r - f*(splits< 0.5-t/2))
+    st = pm.Beta('st', alpha=1, beta=1)
+    c = pm.Gamma('c', alpha=1, beta=1)
+    odds = np.exp(c*stakes**st + splits*r - f*(splits< 0.5-t/2))
     p = odds / (1 + odds)
     a = pm.Binomial('a', 1, p, observed=actions)
     fitted = pm.fit(method='advi')
@@ -140,14 +145,14 @@ if __name__ == "__main__":
   # see https://www.sas.upenn.edu/~cb36/files/2010_anem.pdf
   np.random.seed(3)
 
-  def real_policy(s):
-    num = np.exp(s >0.4)
+  def real_policy(sp, st):
+    num = np.exp(np.sqrt(st)*sp/2 + (sp >0.4))
     prob = num / (1 + num)
     return np.random.binomial(1, p=prob)
     # return s > 0.4
 
-  splits, actions = generate_ultimatum_data(real_policy, n=500)
-  tf, tr, comp = model_uncertainty(splits, actions, sd=0.1, temp=5)
+  splits, actions, stakes = generate_ultimatum_data(real_policy, n=100)
+  tf, tr, comp = model_uncertainty(splits, stakes, actions, sd=0.1, temp=5)
 
   recommended_actions = []
   priors_f = np.linspace(0.0, 1.0, 11)
