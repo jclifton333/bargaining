@@ -34,17 +34,16 @@ def simple_boltzmann_ll(r, splits, actions, temp=1.):
 def model_uncertainty(splits, actions, temp=1., sd=1.):
   with pm.Model() as repeated_model:
     r = pm.Normal('r', mu=0, sd=sd)
-    p = pm.Gamma('p', alpha=1, beta=1)
-    t = pm.Uniform('t', lower=0, upper=0.5)
-    u_rej = (splits < 0.5-t)*p*r + r*splits*(splits>0.5-t)
-    u_acc = 2*splits*r
-    odds_rej = np.exp(u_rej)
-    odds_acc = np.exp(u_acc)
-    p = odds_acc / (odds_rej + odds_acc)
+    # p = pm.Gamma('p', alpha=1, beta=1)
+    # t = pm.Beta('t', alpha=2, beta=5)
+    odds_a = np.exp(r*(splits > 0.4))
+    # odds_r = np.exp(p*(splits < 0.5-t/2))
+    odds_r = 1
+    p = odds_a / (odds_r + odds_a)
     a = pm.Binomial('a', 1, p, observed=actions)
-    # fitted = pm.fit(method='advi')
-    # trace_repeated = fitted.sample(2000)
-    trace_repeated = pm.sample(40000, step=pm.Metropolis(), chains=1, cores=4)
+    fitted = pm.fit(method='advi')
+    trace_repeated = fitted.sample(2000)
+    # trace_repeated = pm.sample(200000, step=pm.Slice(), chains=2, cores=4)
 
 
   # with pm.Model() as simple_model:
@@ -55,19 +54,22 @@ def model_uncertainty(splits, actions, temp=1., sd=1.):
 
   with pm.Model() as fairness_model:
     r = pm.Normal('r', mu=0, sd=sd)
-    t = pm.Uniform('t', lower=0, upper=0.5)
+    t = pm.Beta('t', alpha=2, beta=5)
     f = pm.Normal('f', mu=0, sd=sd)
     b = pm.Normal('b', mu=0, sd=sd)
-    odds = np.exp(splits*r - f*(splits< 0.5-t) - b*(splits > 0.5+t))
+    odds = np.exp(temp*(splits*r - f*(splits< 0.5-t/2) - b*(splits > 0.5+t/2)))
     p = odds / (1 + odds)
     a = pm.Binomial('a', 1, p, observed=actions)
-    # fitted = pm.fit(method='advi')
-    # trace_fairness = fitted.sample(2000)
-    trace_fairness = pm.sample(40000, step=pm.Metropolis(), chains=1, cores=4)
+    fitted = pm.fit(method='advi')
+    trace_fairness = fitted.sample(2000)
+    # trace_fairness = pm.sample(200000, step=pm.Slice(), chains=2, cores=4)
 
+  fairness_model.name = 'fair'
+  repeated_model.name = 'repeated'
   model_dict = dict(zip([fairness_model, repeated_model],
                         [trace_fairness, trace_repeated]))
-  comp = pm.compare(model_dict, method='BB-pseudo-BMA')
+  comp = pm.compare(model_dict, ic='LOO', method='BB-pseudo-BMA')
+  pdb.set_trace()
   return trace_fairness, trace_repeated, comp
 
 
@@ -139,20 +141,21 @@ def maximize_all_likelihoods(splits, actions, temp=1.):
 if __name__ == "__main__":
   # TODO: use models from the literature
   # see https://www.sas.upenn.edu/~cb36/files/2010_anem.pdf
-  np.random.seed(5)
+  np.random.seed(3)
 
   def real_policy(s):
-    # num = np.exp(s -5*(s < 0.5)*(1-s)**2)
-    # prob = num / (1 + num)
-    # return np.random.binomial(1, p=prob)
-    return (s -5*(s < 0.5)*(1-s)**2 > 0.5)
+    num = np.exp(s >0.4)
+    prob = num / (1 + num)
+    return np.random.binomial(1, p=prob)
+    # return s > 0.4
 
-  splits, actions = generate_ultimatum_data(real_policy, n=100)
-  tf, tr, comp = model_uncertainty(splits, actions)
+  splits, actions = generate_ultimatum_data(real_policy, n=500)
+  tf, tr, comp = model_uncertainty(splits, actions, sd=0.1, temp=5)
 
   recommended_actions = []
-  priors_f = np.linspace(0.0, 1.0, 6)
+  priors_f = np.linspace(0.0, 0.5, 6)
   evs = [[] for _ in range(len(priors_f))]
+  offerer_evs = [[] for _ in range(len(priors_f))]
   wf, wr = comp['weight']
   posteriors_f = [pf*wf*(wf+wr) / (pf*wf*(wf+wr) + (1-pf)*wr*(wf+wr)) for pf in
                   priors_f]
@@ -168,13 +171,15 @@ if __name__ == "__main__":
       ur = pr['r']*s
       ur_0.append(ur)
     for i, post_f in enumerate(posteriors_f):
-      evf = np.mean(uf_0)
-      evr = np.mean(ur_0)
-      evs[i].append(post_f*evf + (1-post_f)*evr)
+      post_dbn = post_f*np.array(uf_0) + (1-post_f)*np.array(ur_0)
+      evs[i].append(np.median(post_dbn))
+      offerer_evs[i].append((1-s)*np.mean(post_dbn > 0))
 
-
-  for prior, ev in zip(priors_f, evs):
-    plt.plot(s_range, ev, label=str(prior)) 
+  print(wr, wf)
+  pm.traceplot(tr)
+  plt.show()
+  for prior, ev in zip(priors_f, offerer_evs):
+    plt.plot(s_range, ev, label=str(prior))
   plt.legend()
   plt.show()
 
