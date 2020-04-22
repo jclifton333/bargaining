@@ -31,19 +31,21 @@ def simple_boltzmann_ll(r, splits, actions, temp=1.):
   return -log_lik + r**2
 
 
-def model_uncertainty(splits, actions, temp=1.):
+def model_uncertainty(splits, actions, temp=1., sd=1.):
   with pm.Model() as repeated_model:
-    r = pm.Normal('r', mu=0, sd=1)
+    r = pm.Normal('r', mu=0, sd=sd)
     p = pm.Gamma('p', alpha=1, beta=1)
     t = pm.Uniform('t', lower=0, upper=0.5)
-    u_rej = (splits < 0.5-t)*p*r
+    u_rej = (splits < 0.5-t)*p*r + r*splits*(splits>0.5-t)
     u_acc = 2*splits*r
     odds_rej = np.exp(u_rej)
     odds_acc = np.exp(u_acc)
     p = odds_acc / (odds_rej + odds_acc)
     a = pm.Binomial('a', 1, p, observed=actions)
-    fitted = pm.fit(method='advi')
-    trace_repeated = fitted.sample(2000)
+    # fitted = pm.fit(method='advi')
+    # trace_repeated = fitted.sample(2000)
+    trace_repeated = pm.sample(40000, step=pm.Metropolis(), chains=1, cores=4)
+
 
   # with pm.Model() as simple_model:
   #   r = pm.Normal('r', mu=0, sd=1)
@@ -52,14 +54,16 @@ def model_uncertainty(splits, actions, temp=1.):
   #   trace_simple = pm.sample(2000, init='map')
 
   with pm.Model() as fairness_model:
-    r = pm.Normal('r', mu=0, sd=1)
+    r = pm.Normal('r', mu=0, sd=sd)
     t = pm.Uniform('t', lower=0, upper=0.5)
-    f = pm.Normal('f', mu=0, sd=1)
-    odds = np.exp(splits*r - f*(splits< 0.5-t))
+    f = pm.Normal('f', mu=0, sd=sd)
+    b = pm.Normal('b', mu=0, sd=sd)
+    odds = np.exp(splits*r - f*(splits< 0.5-t) - b*(splits > 0.5+t))
     p = odds / (1 + odds)
     a = pm.Binomial('a', 1, p, observed=actions)
-    fitted = pm.fit(method='advi')
-    trace_fairness = fitted.sample(2000)
+    # fitted = pm.fit(method='advi')
+    # trace_fairness = fitted.sample(2000)
+    trace_fairness = pm.sample(40000, step=pm.Metropolis(), chains=1, cores=4)
 
   model_dict = dict(zip([fairness_model, repeated_model],
                         [trace_fairness, trace_repeated]))
@@ -133,32 +137,45 @@ def maximize_all_likelihoods(splits, actions, temp=1.):
 
 
 if __name__ == "__main__":
+  # TODO: use models from the literature
+  # see https://www.sas.upenn.edu/~cb36/files/2010_anem.pdf
+  np.random.seed(5)
+
   def real_policy(s):
-    num = np.exp(s -5*(s < 0.5)*(1-s)**2)
-    prob = num / (1 + num)
-    return np.random.binomial(1, p=prob)
-  # real_policy = lambda s: s > 0.4
+    # num = np.exp(s -5*(s < 0.5)*(1-s)**2)
+    # prob = num / (1 + num)
+    # return np.random.binomial(1, p=prob)
+    return (s -5*(s < 0.5)*(1-s)**2 > 0.5)
 
   splits, actions = generate_ultimatum_data(real_policy, n=100)
   tf, tr, comp = model_uncertainty(splits, actions)
 
   recommended_actions = []
-  evs = []
+  priors_f = np.linspace(0.0, 1.0, 6)
+  evs = [[] for _ in range(len(priors_f))]
   wf, wr = comp['weight']
+  posteriors_f = [pf*wf*(wf+wr) / (pf*wf*(wf+wr) + (1-pf)*wr*(wf+wr)) for pf in
+                  priors_f]
   s_range = np.linspace(0, 1, 20)
   for s in s_range:
     uf_0 = []
     ur_0 = []
     for pf in tf:
-      uf = pf['r']*s - pf['f']*(s< 0.5-pf['t'])
+      # TODO: make sure this matches current version of model
+      uf = pf['r']*s - pf['f']*(s< 0.5-pf['t']) - pf['b']*(s>0.5+pf['t'])
       uf_0.append(uf)
     for pr in tr:
       ur = pr['r']*s
       ur_0.append(ur)
-    ev = wf*np.mean(uf_0) + wr*np.mean(ur_0)
-    evs.append(ev)
-    recommended_actions.append(ev > 0)
-  plt.plot(s_range, evs)
+    for i, post_f in enumerate(posteriors_f):
+      evf = np.mean(uf_0)
+      evr = np.mean(ur_0)
+      evs[i].append(post_f*evf + (1-post_f)*evr)
+
+
+  for prior, ev in zip(priors_f, evs):
+    plt.plot(s_range, ev, label=str(prior)) 
+  plt.legend()
   plt.show()
 
     
