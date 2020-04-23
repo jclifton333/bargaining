@@ -34,20 +34,21 @@ def simple_boltzmann_ll(r, splits, actions, temp=1.):
   return -log_lik + r**2
 
 
-def big_model(splits, stakes, actions, p_prior='normal', c_prior='normal',
-              gamma_param=1., sd=1., st_t_param=1.):
+def big_model(splits, stakes, actions, p_prior='normal', f_prior='gamma',
+              gamma_param=1., sd=1., f_mean=1., st_t_param=1.):
   with pm.Model() as model:
     # Specify priors
-    r = pm.Gamma('r', alpha=1, beta=1)
-    if p_prior == 'normal':
-      p = pm.Normal('p', mu=0, sd=sd)
-    else:
-      p = pm.Gamma('p', alpha=0.1, beta=0.1)
-    t = pm.Beta('t', alpha=2, beta=5)
+    r = pm.Normal('r', mu=1, sd=gamma_param)
+    p = pm.Normal('p', mu=1, sd=gamma_param)
+    t = pm.Beta('t', alpha=1, beta=1)
     st = pm.Beta('st', alpha=1, beta=1)
-    f = pm.Gamma('f', alpha=0.1*gamma_param, beta=0.1)
-    temp = pm.Gamma('temp', alpha=0.1, beta=0.1)
-    st_t = pm.Gamma('st_t', alpha=0.1*st_t_param, beta=0.1)
+    # f = pm.Normal('f', mu=1*1, sd=gamma_param)
+    if f_prior == 'normal':
+      f = pm.Normal('f', mu=f_mean, sd=gamma_param)
+    elif f_prior =='gamma':
+      f = pm.Normal('f', mu=1*5, sd=gamma_param)
+    temp = pm.Normal('temp', mu=1, sd=gamma_param)
+    st_t = pm.Normal('st_t', mu=1, sd=gamma_param)
 
     # Specify model
     soft_indicator_num = np.exp((0.5-t/2 - splits)*temp)
@@ -184,19 +185,20 @@ if __name__ == "__main__":
     return np.random.binomial(1, p=prob)
     # return s > 0.4
 
-  splits, actions, stakes = generate_ultimatum_data(real_policy, n=100)
+  splits, actions, stakes = generate_ultimatum_data(real_policy, n=50)
   # tf, tr, comp = model_uncertainty(splits, stakes, actions, sd=0.1, temp=5)
   tb_list = []
   prior_list = []
   sds_list = [1]
   p_dbns_list = ['gamma']
   c_dbns_list = ['gamma']
-  gamma_param_list = [1, 3]
-  st_t_param_list = [1, 3]
-  dbns_list = [(i, j) for i in gamma_param_list for j in st_t_param_list]
+  gamma_param_list = [1, 10]
+  f_mean_list = [0]
+  st_t_param_list = [0.1]
+  dbns_list = [(i, j) for i in gamma_param_list for j in f_mean_list]
   for dbn in dbns_list:
     tb, prior = big_model(splits, stakes, actions, gamma_param=dbn[0],
-                          st_t_param=dbn[1])
+                         f_mean=dbn[1])
     tb_list.append(tb)
     prior_list.append(prior)
 
@@ -247,7 +249,7 @@ if __name__ == "__main__":
     ev_prior = evs_prior[i]
     color = colors[i]
     max_s = s_range[np.argmax(ev)]
-    plt.plot(s_range, ev, label='fmean={},smean={}'.format(prior[0],prior[1]),
+    plt.plot(s_range, ev, label=prior,
              color=color)
     plt.plot([max_s], [np.max(ev)], marker='*', color=color)
     # plt.plot(s_range, ev_prior, label='{} prior'.format(prior), color=color,
