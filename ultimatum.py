@@ -36,12 +36,14 @@ def simple_boltzmann_ll(r, splits, actions, temp=1.):
 
 
 def big_model(splits, stakes, actions, p_prior='normal', f_prior='uniform',
-              gamma_param=1., sd=1., f_mean=1., unif_upper=10, st_t_param=1.):
-  with pm.Model() as model:
+              gamma_param=1., sd=10., f_mean=1., unif_upper=10, st_t_param=1.):
+  model = pm.Model()
+  with model:
     # Specify priors
-    t = pm.Beta('t', alpha=1, beta=1)
+    # t = pm.Beta('t', alpha=1, beta=1)
+    t = pm.Normal('t', mu=0, sd=sd)
     st = pm.Beta('st', alpha=1, beta=1)
-    temp = pm.Normal('temp', mu=0, sd=sd)
+    # temp = pm.Uniform('temp', lower=0, upper=10)
     if f_prior == 'normal':
       r = pm.Normal('r', mu=0, sd=sd)
       p = pm.Normal('p', mu=0, sd=sd)
@@ -54,18 +56,20 @@ def big_model(splits, stakes, actions, p_prior='normal', f_prior='uniform',
       st_t = pm.Uniform('st_t', lower=0, upper=unif_upper)
 
     # Specify model
-    soft_indicator_num = np.exp((0.5-t/2 - splits)*temp)
-    soft_indicator = soft_indicator_num / (soft_indicator_num + 1)
-    odds_a = np.exp(2*r*splits*stakes**st - (stakes < st_t)*f*(0.5-t/2-splits)*soft_indicator)
+    # soft_indicator_num = np.exp((0.5-t/2 - splits)*temp)
+    # soft_indicator = soft_indicator_num / (soft_indicator_num + 1)
+    soft_indicator = (0.5-t/2>splits)
+    odds_a = np.exp(2*r*splits - f*soft_indicator)
     odds_r = np.exp(stakes*p*soft_indicator)
-    p = odds_a / (odds_r + odds_a)
-    a = pm.Binomial('a', 1, p, observed=actions)
+    prob = odds_a / (odds_r + odds_a)
+    a = pm.Binomial('a', 1, prob, observed=actions)
 
     # Fit and sample
     fitted = pm.fit(method='advi')
     trace_big = fitted.sample(2000)
+    # trace_big = pm.sample(40000, step=pm.Slice(), chains=2, cores=4)
     prior = pm.sample_prior_predictive(2000)
-  return trace_big, prior
+  return trace_big, prior, model
 
 def model_uncertainty(splits, stakes, actions, temp=1., sd=1.):
   with pm.Model() as repeated_model:
@@ -177,10 +181,10 @@ def maximize_all_likelihoods(splits, actions, temp=1.):
 if __name__ == "__main__":
   # TODO: use models from the literature
   # see https://www.sas.upenn.edu/~cb36/files/2010_anem.pdf
-  np.random.seed(1)
+  np.random.seed(3)
 
   def real_ev(sp, st):
-    return st**(1/3)*sp - (st < 1.75)*(0.4-sp)*(sp<0.4)
+    return st**(1/3)*sp - (sp<0.4)
 
   def real_policy(sp, st):
     num = np.exp(real_ev(sp, st))
@@ -200,11 +204,11 @@ if __name__ == "__main__":
   st_t_param_list = [1]
   unif_upper_list = [10]
   dbns_list = unif_upper_list
-  sample_size_list = [10, 100, 10000, 50000]
+  sample_size_list = [10, 100, 10000]
   for sample_size in sample_size_list:
     splits, actions, stakes = generate_ultimatum_data(real_policy,
                                                       n=sample_size)
-    tb, prior = big_model(splits, stakes, actions, unif_upper=10)
+    tb, prior, model = big_model(splits, stakes, actions, unif_upper=10)
     tb_list.append(tb)
     prior_list.append(prior)
 
@@ -224,8 +228,7 @@ if __name__ == "__main__":
       pri = prior_list[i]
       for j, post in enumerate(tb):
         # Get posterior expectations
-        u_a = 2*post['r']*s*scale**post['st'] - \
-            (scale < post['st_t'])*post['f']*(0.5-post['t']/2-s)*(s< 0.5-post['t']/2)
+        u_a = 2*post['r']*s - post['f']*(s< 0.5-post['t']/2)
         # u_r = scale*post['p']*(s < 0.5-post['t']/2)
         u_r = 0
         u_diff = u_a - u_r
@@ -234,7 +237,7 @@ if __name__ == "__main__":
 
         # Get prior expectations
         u_a_pri = 2*pri['r'][j]*s*scale**pri['st'][j] - \
-          (scale < pri['st_t'][j])*pri['f'][j]*(0.5-pri['t'][j]/2-s)*(s< 0.5-pri['t'][j]/2)
+          (scale < pri['st_t'][j])*pri['f'][j]*(s< 0.5-pri['t'][j]/2)
         # u_r_pri = scale*pri['p'][j]*(s < 0.5-pri['t'][j]/2)
         u_r_pri = 0
         ua_prior_list.append(u_a_pri)
@@ -245,8 +248,9 @@ if __name__ == "__main__":
       evs[i].append(accept_prob*(1-s)*scale)
       evs_prior[i].append(accept_prob_prior*(1-s)*scale)
 
-  # pm.traceplot(tb_list[0])
-  # plt.show()
+  pm.traceplot(tb_list[0])
+  # pm.traceplot(tb_list[1])
+  plt.show()
   real_off_ev = lambda s: (real_ev(s, scale) > 0)*(1-s)*scale
   colors = ['b', 'g', 'r', 'k', 'y']
   for i in range(len(sample_size_list)):
@@ -267,9 +271,10 @@ if __name__ == "__main__":
     color = colors[i]
     max_s = s_range[np.argmax(ev)]
     plt.plot(s_range, ev, label='n={}'.format(n), color=color)
-    plt.plot([max_s], [np.max(ev)], marker='*', color=color)
+    plt.plot([max_s], [np.min(evs)], marker='*', color=color)
     # plt.plot(s_range, ev_prior, label='n={}'.format(n), color=color,
     #          linestyle='dashed')
+  # plt.plot(s_range, evs_prior[0], label='prior', color='k')
   plt.plot(s_range, [real_off_ev(s) for s in s_range], label='true')
   plt.xlabel('% to Responder')
   plt.ylabel('Proposer posterior expected utility')
