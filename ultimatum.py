@@ -40,35 +40,39 @@ def big_model(splits, stakes, actions, p_prior='normal', f_prior='uniform',
   model = pm.Model()
   with model:
     # Specify priors
-    # t = pm.Beta('t', alpha=1, beta=1)
-    t = pm.Normal('t', mu=0, sd=sd)
-    st = pm.Beta('st', alpha=1, beta=1)
-    # temp = pm.Uniform('temp', lower=0, upper=10)
+    t = pm.Uniform('t', lower=0, upper=1)
+    # st = pm.Beta('st', alpha=1, beta=1)
+    temp = pm.Uniform('temp', lower=0, upper=1000)
     if f_prior == 'normal':
       r = pm.Normal('r', mu=0, sd=sd)
       p = pm.Normal('p', mu=0, sd=sd)
       f = pm.Normal('f', mu=f_mean, sd=sd)
-      st_t = pm.Normal('st_t', mu=0, sd=sd)
+      # st_t = pm.Normal('st_t', mu=0, sd=sd)
     else:
-      r = pm.Uniform('r', lower=0, upper=unif_upper)
-      p = pm.Uniform('p', lower=0, upper=unif_upper)
-      f = pm.Uniform('f', lower=0, upper=unif_upper)
-      st_t = pm.Uniform('st_t', lower=0, upper=unif_upper)
+      # r = pm.Uniform('r', lower=0, upper=unif_upper)
+      # p = pm.Uniform('p', lower=0.0, upper=10)
+      # f = pm.Uniform('f', lower=0.0, upper=10)
+      p = pm.Lognormal('p', mu=1, sd=1)
+      f = pm.Lognormal('f', mu=0.0, sd=1)
+      # st_t = pm.Uniform('st_t', lower=0, upper=unif_upper)
 
     # Specify model
-    # soft_indicator_num = np.exp((0.5-t/2 - splits)*temp)
-    # soft_indicator = soft_indicator_num / (soft_indicator_num + 1)
-    soft_indicator = (0.5-t/2>splits)
-    odds_a = np.exp(2*r*splits - f*soft_indicator)
-    odds_r = np.exp(stakes*p*soft_indicator)
+    soft_indicator_num = np.exp((0.5-t/2 - splits)*temp)
+    soft_indicator = soft_indicator_num / (soft_indicator_num + 1)
+    # soft_indicator = (0.5-t/2>splits)
+    # soft_indicator = (0.4>splits)
+    # odds_a = np.exp(2*r*splits - f*soft_indicator)
+    odds_a = np.exp(splits - f*soft_indicator)
+    odds_r = np.exp(p*soft_indicator)
+    # odds_r = 1
     prob = odds_a / (odds_r + odds_a)
     a = pm.Binomial('a', 1, prob, observed=actions)
 
     # Fit and sample
-    fitted = pm.fit(method='advi')
-    trace_big = fitted.sample(2000)
-    # trace_big = pm.sample(40000, step=pm.Slice(), chains=2, cores=4)
-    prior = pm.sample_prior_predictive(2000)
+    # fitted = pm.fit(method='fullrank_advi')
+    # trace_big = fitted.sample(2000)
+    trace_big = pm.sample(10000, chains=1, cores=4, seed=3)
+    prior = pm.sample_prior_predictive(10000)
   return trace_big, prior, model
 
 def model_uncertainty(splits, stakes, actions, temp=1., sd=1.):
@@ -181,10 +185,10 @@ def maximize_all_likelihoods(splits, actions, temp=1.):
 if __name__ == "__main__":
   # TODO: use models from the literature
   # see https://www.sas.upenn.edu/~cb36/files/2010_anem.pdf
-  np.random.seed(3)
+  np.random.seed(4)
 
   def real_ev(sp, st):
-    return st**(1/3)*sp - (sp<0.4)
+    return sp - (sp<0.4)
 
   def real_policy(sp, st):
     num = np.exp(real_ev(sp, st))
@@ -204,7 +208,7 @@ if __name__ == "__main__":
   st_t_param_list = [1]
   unif_upper_list = [10]
   dbns_list = unif_upper_list
-  sample_size_list = [10, 100, 10000]
+  sample_size_list = [100]
   for sample_size in sample_size_list:
     splits, actions, stakes = generate_ultimatum_data(real_policy,
                                                       n=sample_size)
@@ -217,7 +221,7 @@ if __name__ == "__main__":
   evs_prior = [[] for _ in range(len(tb_list))]
   offerer_evs = [[] for _ in range(len(tb_list))]
   s_range = np.linspace(0, 1, 20)
-  scale = 1.5
+  scale = 1 
   for s in s_range:
     ua_list = []
     ur_list = []
@@ -228,7 +232,8 @@ if __name__ == "__main__":
       pri = prior_list[i]
       for j, post in enumerate(tb):
         # Get posterior expectations
-        u_a = 2*post['r']*s - post['f']*(s< 0.5-post['t']/2)
+        # u_a = post['r']*s - post['f']*(s< 0.5-post['t']/2)
+        u_a = s - post['f']*(s< 0.5-post['t']/2)
         # u_r = scale*post['p']*(s < 0.5-post['t']/2)
         u_r = 0
         u_diff = u_a - u_r
@@ -236,8 +241,7 @@ if __name__ == "__main__":
         ur_list.append(u_r)
 
         # Get prior expectations
-        u_a_pri = 2*pri['r'][j]*s*scale**pri['st'][j] - \
-          (scale < pri['st_t'][j])*pri['f'][j]*(s< 0.5-pri['t'][j]/2)
+        u_a_pri = s - pri['f'][j]*(s< 0.5-pri['t'][j]/2)
         # u_r_pri = scale*pri['p'][j]*(s < 0.5-pri['t'][j]/2)
         u_r_pri = 0
         ua_prior_list.append(u_a_pri)
