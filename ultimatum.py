@@ -41,8 +41,8 @@ def big_model(splits, stakes, actions, p_prior='normal', f_prior='uniform',
   with model:
     # Specify priors
     t = pm.Uniform('t', lower=0, upper=1)
-    # st = pm.Beta('st', alpha=1, beta=1)
     temp = pm.Uniform('temp', lower=0, upper=1000)
+    # st = pm.Beta('st', alpha=1, beta=1)
     if f_prior == 'normal':
       r = pm.Normal('r', mu=0, sd=sd)
       p = pm.Normal('p', mu=0, sd=sd)
@@ -52,8 +52,8 @@ def big_model(splits, stakes, actions, p_prior='normal', f_prior='uniform',
       # r = pm.Uniform('r', lower=0, upper=unif_upper)
       # p = pm.Uniform('p', lower=0.0, upper=10)
       # f = pm.Uniform('f', lower=0.0, upper=10)
-      p = pm.Lognormal('p', mu=1, sd=1)
-      f = pm.Lognormal('f', mu=0.0, sd=1)
+      p = pm.Gamma('p', alpha=1*4., beta=1*4.)
+      f = pm.Gamma('f', alpha=0.1*4., beta=1.*4)
       # st_t = pm.Uniform('st_t', lower=0, upper=unif_upper)
 
     # Specify model
@@ -208,7 +208,7 @@ if __name__ == "__main__":
   st_t_param_list = [1]
   unif_upper_list = [10]
   dbns_list = unif_upper_list
-  sample_size_list = [100]
+  sample_size_list = [1000]
   for sample_size in sample_size_list:
     splits, actions, stakes = generate_ultimatum_data(real_policy,
                                                       n=sample_size)
