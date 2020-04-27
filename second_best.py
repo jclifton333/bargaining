@@ -30,13 +30,16 @@ def max_lik_big_model(actions, splits, penalty=0.01):
   return res.x.round(2)
 
 
-def optimize_against_policy(t, f):
+def optimize_against_policy(t, f_list, prob_list):
   split_grid = np.linspace(0, 1, 20)
   best_val = -float('inf')
   best_s = None
   for s in split_grid:
-    val = (1-s)*(s - f*(s < 0.5-t) > 0)
-    if val > best_val:
+    sval = 0.
+    for f, prob in zip(f_list, prob_list):
+      val = (1-s)*(s - f*(s < 0.5-t) > 0)*prob
+      sval += val / len(f_list)
+    if sval > best_val:
       best_s = s
       best_val = val
   return best_s, best_val
@@ -46,20 +49,22 @@ def adversary(actions, splits, t, temp, f_list, p_list):
   MULTIPLIER = 10.
   log_liks = [big_model_lik(actions, splits, t, temp, f, p)
               for f, p in zip(f_list, p_list)]
-  total_prob = np.sum([np.exp(ll) for ll in log_liks])
-  best_vals = [optimize_against_policy(t, f)[1] for f in f_list]
-  mean_val = np.mean(best_vals)
+  liks = np.array([np.exp(ll) for ll in log_liks])
+  const = liks.sum()
+  probs = liks / const
+  _, mean_val = optimize_against_policy(t, f_list, probs)
 
   def objective(theta):
     f0, p0 = theta[0], theta[1]
     new_lik = big_model_lik(actions, splits, t, temp, f0, p0)
-    new_s, _ = optimize_against_policy(t, f0)
-    new_val = np.mean([(1 - new_s)*(new_s - f*(new_s < 0.5-t) > 0)
-                       for f in f_list])
+    # TODO: think about this objective
+    new_s, _ = optimize_against_policy(t, [f0], [1.0])
+    new_val = np.sum([(1 - new_s)*(new_s - f*(new_s < 0.5-t) > 0)*prob
+                       for f, prob in zip(f_list, probs)])
     avg_dist = np.mean([np.abs(f0-f) + np.abs(p0-p)
                         for f, p in zip(f_list, p_list)])
     cost = np.log(np.max((mean_val- new_val, 0.001))) + new_lik \
-        - np.log(np.exp(new_lik) + total_prob) + np.log(avg_dist/2)
+        - np.log(np.exp(new_lik) + const) + np.log(avg_dist/2)
     return -cost
 
   # bounds = {'f0': (0., 10.), 'p0': (0., 10.)}
@@ -75,14 +80,24 @@ def adversary(actions, splits, t, temp, f_list, p_list):
 
 
 def repeated_adversary(num_iter, actions, splits, t, temp, f, p):
+  initial_s, initial_val = optimize_against_policy(t, [f], [1.])
   f_list = [f]
   p_list = [p]
   for k in range(num_iter):
     new_param = adversary(actions, splits, t, temp, f_list, p_list)
     f_list.append(new_param[0])
     p_list.append(new_param[1])
+
+  # Get new policy 
   new_params = [(f_, p_) for f_, p_ in zip(f_list, p_list)]
-  return new_params
+  log_liks = [big_model_lik(actions, splits, t, temp, f, p)
+              for f, p in zip(f_list, p_list)]
+  liks = np.array([np.exp(ll) for ll in log_liks])
+  const = liks.sum()
+  probs = liks / const
+  new_s, new_val = optimize_against_policy(t, f_list, probs)
+
+  return new_params, initial_s, new_s
 
 
 if __name__ == "__main__":
