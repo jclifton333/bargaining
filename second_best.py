@@ -42,18 +42,24 @@ def optimize_against_policy(t, f):
   return best_s, best_val
 
 
-def adversary(actions, splits, t, temp, f, p):
+def adversary(actions, splits, t, temp, f_list, p_list):
   MULTIPLIER = 10.
-  best_lik = big_model_lik(actions, splits, t, temp, f, p)
-  _, best_val = optimize_against_policy(t, f)
+  log_liks = [big_model_lik(actions, splits, t, temp, f, p)
+              for f, p in zip(f_list, p_list)]
+  total_prob = np.sum([np.exp(ll) for ll in log_liks])
+  best_vals = [optimize_against_policy(t, f)[1] for f in f_list]
+  mean_val = np.mean(best_vals)
 
   def objective(theta):
     f0, p0 = theta[0], theta[1]
     new_lik = big_model_lik(actions, splits, t, temp, f0, p0)
     new_s, _ = optimize_against_policy(t, f0)
-    new_val = (1 - new_s)*(new_s - f*(new_s < 0.5-t) > 0)
-    cost = np.log(np.max((best_val - new_val, 0.001))) + new_lik \
-        - np.log(np.exp(new_lik) + np.exp(best_lik))
+    new_val = np.mean([(1 - new_s)*(new_s - f*(new_s < 0.5-t) > 0)
+                       for f in f_list])
+    avg_dist = np.mean([np.abs(f0-f) + np.abs(p0-p)
+                        for f, p in zip(f_list, p_list)])
+    cost = np.log(np.max((mean_val- new_val, 0.001))) + new_lik \
+        - np.log(np.exp(new_lik) + total_prob) + np.log(avg_dist/2)
     return -cost
 
   # bounds = {'f0': (0., 10.), 'p0': (0., 10.)}
@@ -64,9 +70,19 @@ def adversary(actions, splits, t, temp, f, p):
   # best_param = bo.res['max']['max_params']
   res = minimize(objective, x0=[0.5, 0.5], method='trust-constr',
                  bounds=Bounds([0., 0.], [10., 10.]))
-  best_param = res.x
-  pdb.set_trace()
+  best_param = res.x.round(2)
   return best_param
+
+
+def repeated_adversary(num_iter, actions, splits, t, temp, f, p):
+  f_list = [f]
+  p_list = [p]
+  for k in range(num_iter):
+    new_param = adversary(actions, splits, t, temp, f_list, p_list)
+    f_list.append(new_param[0])
+    p_list.append(new_param[1])
+  new_params = [(f_, p_) for f_, p_ in zip(f_list, p_list)]
+  return new_params
 
 
 if __name__ == "__main__":
@@ -82,5 +98,6 @@ if __name__ == "__main__":
 
   splits, actions, _ = generate_ultimatum_data(real_policy, n=N)
   thetaHat = max_lik_big_model(actions, splits, penalty=0.05)
-  fp2 = adversary(actions, splits, thetaHat[0], thetaHat[1],
-                  thetaHat[2], thetaHat[3])
+  new_params = repeated_adversary(5, actions, splits, thetaHat[0], thetaHat[1],
+                                  thetaHat[2], thetaHat[3])
+  print(new_params)
