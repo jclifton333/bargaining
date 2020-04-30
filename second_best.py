@@ -104,13 +104,16 @@ def repeated_adversary(num_iter, actions, splits, t, temp, f, p):
   initial_s, initial_val = optimize_against_policy(t, [f], [1.])
   f_list = [f]
   p_list = [p]
-  for k in range(num_iter):
+  k = 0
+  feasible = True
+  while k < num_iter and feasible:
     new_param, new_cost, feasible = adversary(actions, splits, t, temp, f_list, p_list)
-    f_list.append(new_param[0])
-    p_list.append(new_param[1])
+    if feasible:
+      f_list.append(new_param[0])
+      p_list.append(new_param[1])
     liks, const, probs = probs_from_params(actions, splits, t, temp, f_list, p_list)
     new_s, new_val = optimize_against_policy(t, f_list, probs)
-    print(new_s, feasible)
+    k += 1
 
   # Get new policy 
   new_params = [(f_, p_) for f_, p_ in zip(f_list, p_list)]
@@ -120,6 +123,7 @@ def repeated_adversary(num_iter, actions, splits, t, temp, f, p):
 
 if __name__ == "__main__":
   N = 500
+  # TODO: also need to incorporate uncertainty in t
 
   def real_ev(sp):
     return sp - (sp < 0.4)

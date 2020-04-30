@@ -1,6 +1,8 @@
 import numpy as np
 from scipy.optimize import minimize, Bounds
 from scipy.special import expit
+from scipy.stats import betaprime, gamma, invgamma
+from scipy.integrate import quad, dblquad
 import pymc3 as pm
 import matplotlib.pyplot as plt
 import pdb
@@ -40,8 +42,8 @@ def big_model(splits, stakes, actions, p_prior='normal', f_prior='uniform',
   model = pm.Model()
   with model:
     # Specify priors
-    t = pm.Uniform('t', lower=0, upper=1)
-    temp = pm.Uniform('temp', lower=0, upper=1000)
+    # t = pm.Uniform('t', lower=0, upper=1)
+    # temp = pm.Uniform('temp', lower=0, upper=1000)
     # st = pm.Beta('st', alpha=1, beta=1)
     if f_prior == 'normal':
       r = pm.Normal('r', mu=0, sd=sd)
@@ -52,15 +54,15 @@ def big_model(splits, stakes, actions, p_prior='normal', f_prior='uniform',
       # r = pm.Uniform('r', lower=0, upper=unif_upper)
       # p = pm.Uniform('p', lower=0.0, upper=10)
       # f = pm.Uniform('f', lower=0.0, upper=10)
-      p = pm.Gamma('p', alpha=1*4., beta=1*4.)
-      f = pm.Gamma('f', alpha=0.1*4., beta=1.*4)
+      p = pm.Gamma('p', alpha=0.1*4., beta=0.1*4.)
+      f = pm.Gamma('f', alpha=0.1*4*gamma_param, beta=0.1*4)
       # st_t = pm.Uniform('st_t', lower=0, upper=unif_upper)
 
     # Specify model
-    soft_indicator_num = np.exp((0.5-t/2 - splits)*temp)
-    soft_indicator = soft_indicator_num / (soft_indicator_num + 1)
+    # soft_indicator_num = np.exp((0.5-t/2 - splits)*temp)
+    # soft_indicator = soft_indicator_num / (soft_indicator_num + 1)
     # soft_indicator = (0.5-t/2>splits)
-    # soft_indicator = (0.4>splits)
+    soft_indicator = (0.4>splits)
     # odds_a = np.exp(2*r*splits - f*soft_indicator)
     odds_a = np.exp(splits - f*soft_indicator)
     odds_r = np.exp(p*soft_indicator)
@@ -71,8 +73,9 @@ def big_model(splits, stakes, actions, p_prior='normal', f_prior='uniform',
     # Fit and sample
     # fitted = pm.fit(method='fullrank_advi')
     # trace_big = fitted.sample(2000)
-    trace_big = pm.sample(10000, chains=1, cores=4, seed=3)
-    prior = pm.sample_prior_predictive(10000)
+    trace_big = pm.sample(20000, chains=1, cores=4, seed=3,
+                          target_accept=0.95)
+    prior = pm.sample_prior_predictive(20000)
   return trace_big, prior, model
 
 def model_uncertainty(splits, stakes, actions, temp=1., sd=1.):
@@ -182,6 +185,36 @@ def maximize_all_likelihoods(splits, actions, temp=1.):
   return
 
 
+def conjugate(s, n, alpha_f=2., alpha_p=2.):
+  # exp(f) ~ Gamma(alpha_f, 1)
+  # exp(p) ~ InvGamma(alpha_p, 1)
+  # exp(f + p) | (s, n) ~ BetaPrime(alpha_f + s, alpha_p + s - n)
+
+  def f_plus_p_posterior_density(z):
+    return betaprime.pdf(z, alpha_f + s, alpha_p + n - s)
+
+  def p_prior_density(expp):
+    return invgamma.pdf(expp, alpha_p)
+
+  def f_posterior_density(expf):
+    def inner_integrand(expp):
+      prod_ = f_plus_p_posterior_density(expf*expp)*p_prior_density(expp)
+      return prod_
+
+    total_prob = quad(inner_integrand, a=0., b=np.inf)[0]
+    density = f_plus_p_posterior_density(expf)
+    return density
+
+  def integrand(expp, expf):
+    expf_dens = f_posterior_density(expf)
+    prod_ = f_plus_p_posterior_density(expf*expp)*p_prior_density(expp)
+    ratio = prod_ * expf / (1 + expf)
+    return ratio
+
+  res = dblquad(integrand, a=0., b=10, gfun=0., hfun=10)
+  return f_posterior_density
+
+
 if __name__ == "__main__":
   # TODO: use models from the literature
   # see https://www.sas.upenn.edu/~cb36/files/2010_anem.pdf
@@ -196,6 +229,19 @@ if __name__ == "__main__":
     return np.random.binomial(1, p=prob)
     # return s > 0.4
 
+  # _, actions, _ = generate_ultimatum_data(real_policy, n=100)
+  # fpost1 = conjugate(np.sum(actions), len(actions))
+  # fpost10 = conjugate(np.sum(actions), len(actions), alpha_p=10)
+  # xs = np.linspace(0, 5, 50)
+  # alpha_pairs = [(5, 5), (5, 1.1), (1.1, 5)]
+  # for af, ap in alpha_pairs:
+  #   fpost = conjugate(np.sum(actions), len(actions), alpha_f=af, alpha_p=ap)
+  #   fs = [fpost(np.exp(x)) for x in xs]
+  #   plt.plot(xs, fs, label='alpha={}'.format((af, ap)))
+  # plt.legend()
+  # plt.legend()
+  # plt.show()
+  # pdb.set_trace()
   # splits, actions, stakes = generate_ultimatum_data(real_policy, n=10000)
   # tf, tr, comp = model_uncertainty(splits, stakes, actions, sd=0.1, temp=5)
   tb_list = []
@@ -203,16 +249,17 @@ if __name__ == "__main__":
   sds_list = [1]
   p_dbns_list = ['gamma']
   c_dbns_list = ['gamma']
-  gamma_param_list = [1]
+  gamma_param_list = [0.1, 0.2, 1.]
   f_mean_list = [0]
   st_t_param_list = [1]
   unif_upper_list = [10]
   dbns_list = unif_upper_list
   sample_size_list = [1000]
-  for sample_size in sample_size_list:
-    splits, actions, stakes = generate_ultimatum_data(real_policy,
-                                                      n=sample_size)
-    tb, prior, model = big_model(splits, stakes, actions, unif_upper=10)
+  for gamma_param in gamma_param_list:
+    splits, actions, stakes = \
+      generate_ultimatum_data(real_policy, n=1000)
+    tb, prior, model = big_model(splits, stakes, actions, unif_upper=10,
+                                gamma_param=gamma_param)
     tb_list.append(tb)
     prior_list.append(prior)
 
@@ -230,10 +277,10 @@ if __name__ == "__main__":
     udiff_list = []
     for i, tb in enumerate(tb_list):
       pri = prior_list[i]
-      for j, post in enumerate(tb):
+      for j, post in enumerate(np.array(tb)[np.where(tb.diverging == False)]):
         # Get posterior expectations
         # u_a = post['r']*s - post['f']*(s< 0.5-post['t']/2)
-        u_a = s - post['f']*(s< 0.5-post['t']/2)
+        u_a = s - post['f']*(s< 0.4)
         # u_r = scale*post['p']*(s < 0.5-post['t']/2)
         u_r = 0
         u_diff = u_a - u_r
@@ -241,7 +288,7 @@ if __name__ == "__main__":
         ur_list.append(u_r)
 
         # Get prior expectations
-        u_a_pri = s - pri['f'][j]*(s< 0.5-pri['t'][j]/2)
+        u_a_pri = s - pri['f'][j]*(s< 0.4)
         # u_r_pri = scale*pri['p'][j]*(s < 0.5-pri['t'][j]/2)
         u_r_pri = 0
         ua_prior_list.append(u_a_pri)
@@ -252,9 +299,9 @@ if __name__ == "__main__":
       evs[i].append(accept_prob*(1-s)*scale)
       evs_prior[i].append(accept_prob_prior*(1-s)*scale)
 
-  pm.traceplot(tb_list[0])
+  # pm.traceplot(tb_list[0])
   # pm.traceplot(tb_list[1])
-  plt.show()
+  # plt.show()
   real_off_ev = lambda s: (real_ev(s, scale) > 0)*(1-s)*scale
   colors = ['b', 'g', 'r', 'k', 'y']
   for i in range(len(sample_size_list)):
@@ -262,27 +309,27 @@ if __name__ == "__main__":
     sns.kdeplot(p_post, color=colors[i], 
                 label='n={}'.format(sample_size_list[i]),
                 shade=True)
-  plt.title('Posterior densities for repeated play parameter')
-  plt.xlabel('r')
-  plt.ylabel('Density')
-  plt.legend(loc=1)
-  plt.show()
+  # plt.title('Posterior densities for repeated play parameter')
+  # plt.xlabel('r')
+  # plt.ylabel('Density')
+  # plt.legend(loc=1)
+  # plt.show()
 
-  for i in range(len(sample_size_list)):
-    n = sample_size_list[i]
+  for i in range(len(gamma_param_list)):
+    # n = sample_size_list[i]
     ev = evs[i]
     ev_prior = evs_prior[i]
+    prior = gamma_param_list[i]
     color = colors[i]
     max_s = s_range[np.argmax(ev)]
-    plt.plot(s_range, ev, label='n={}'.format(n), color=color)
-    plt.plot([max_s], [np.min(evs)], marker='*', color=color)
-    # plt.plot(s_range, ev_prior, label='n={}'.format(n), color=color,
-    #          linestyle='dashed')
+    plt.plot(s_range, ev, label='(alpha_f,alpha_r)={}'.format((prior*0.4, 0.4)), color=color)
+    plt.plot([max_s], [np.min(evs)], marker='*', markersize=9, color=color)
+    plt.plot(s_range, ev_prior, color=color, linestyle='dashed')
   # plt.plot(s_range, evs_prior[0], label='prior', color='k')
   plt.plot(s_range, [real_off_ev(s) for s in s_range], label='true')
   plt.xlabel('% to Responder')
   plt.ylabel('Proposer posterior expected utility')
-  plt.title('Ultimatum (expected) payoffs after different sample sizes')
+  plt.title('Ultimatum (expected) payoffs for different priors')
   plt.legend(loc=1)
   plt.show()
 
