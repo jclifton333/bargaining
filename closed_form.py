@@ -20,16 +20,10 @@ def normal_posterior(x, mu_f, mu_r, sigma_f=1, sigma_r=1., sigma=1):
   # Get posterior on f + r
   n = len(x)
   xbar = x.mean()
-  mu_prior = mu_f + mu_r
-  sigma_prior_sq = sigma_f**2 + sigma_r**2
-  weight = sigma_prior_sq/(sigma**2/n + sigma_prior_sq)
-  mu_post = weight*xbar + (1-weight)*mu_prior
-  sigma_sq_post = 1 / ((1/sigma_prior_sq) + (n/sigma**2))
-
-  # Get posterior on f
-  mu_f_post = mu_post - mu_r
-  sigma_sq_f_post = sigma_sq_post + sigma_r**2
-  sd_f_post = np.sqrt(sigma_sq_f_post)
+  denom = sigma_f**2 + sigma_r**2 + sigma**2
+  mu_post_num = (sigma_r**2 + sigma**2)*mu_f + sigma_f**2*(xbar - mu_r)
+  mu_f_post = mu_post_num / denom
+  sigma_f_post = (sigma_r**2 + sigma**2)*sigma_f**2 / denom
 
   # Plot 
   # xs = np.linspace(-5, 5, 20)
@@ -37,12 +31,14 @@ def normal_posterior(x, mu_f, mu_r, sigma_f=1, sigma_r=1., sigma=1):
   # plt.plot(xs, fs)
   # plt.show()
 
-  return mu_post, mu_f_post, sd_f_post
+  return None, mu_f_post, sigma_f_post
 
 
 if __name__ == "__main__":
   mu_f = 0.05
   mu_r = 0.15
+  mu_f_list = [0.05, 0.1]
+  mu_r_list = [0.15, 0.1]
   sigma_f = 0.04
   sigma_r = 0.04
   sigma = 0.01
@@ -53,15 +49,22 @@ if __name__ == "__main__":
   s = np.random.uniform(0.0, 0.4, size=n)
   y = np.random.normal(loc=s-f_plus_r, scale=0.01, size=n)
   x = s-y
-  mu_post, mu_f_post, sd_f_post = normal_posterior(x, mu_f, mu_r,
-                                                   sigma_f=sigma_f,
-                                                   sigma_r=sigma_f,
-                                                   sigma=sigma)
+  mu_f_post_list = []
+  sd_f_post_list = []
+  for mu_f, mu_r in zip(mu_f_list, mu_r_list):
+    _, mu_f_post, sd_f_post = normal_posterior(x, mu_f, mu_r,
+                                                     sigma_f=sigma_f,
+                                                     sigma_r=sigma_f,
+                                                     sigma=sigma)
+    mu_f_post_list.append(mu_f_post)
+    sd_f_post_list.append(sd_f_post)
+  # traces = []
+  # for mu_f, mu_r in zip(mu_f_list, mu_r_list):
+  #   trace = normal_posterior_mc(x, mu_f, mu_r, sigma_f=sigma_f,
+  #                               sigma_r=sigma_r, sigma=sigma)
+  #   traces.append(trace)
 
-  trace = normal_posterior_mc(x, mu_f, mu_r, sigma_f=sigma_f,
-                              sigma_r=sigma_r, sigma=sigma)
-
-  def u_mc(s, f=None):
+  def u_mc(s, trace, f=None):
     if f is None:
       posterior_payoffs = []
       for param in trace[1000:]:
@@ -76,7 +79,7 @@ if __name__ == "__main__":
       payoff_mean = (1-s)*(opponent_utility > 0)
     return payoff_mean
 
-  def u(s, f=None):
+  def u(s, mu_f_post=None, sd_f_post=None, f=None):
     # Posterior predictive payoff for s
     if f is None:
       mu_f = np.random.normal(loc=mu_f_post, scale=sd_f_post, size=100)
@@ -90,11 +93,28 @@ if __name__ == "__main__":
     return payoff_mean
 
   srange = np.linspace(0, 1., 20)
-  upost_range = np.array([u_mc(s) for s in srange])
-  utrue_range = np.array([u_mc(s, f_true) for s in srange])
-  plt.plot(srange, upost_range, label='post')
-  plt.plot(srange, utrue_range, label='true')
-  plt.legend()
+
+  utrue_range = np.array([u(s, f=f_true) for s in srange])
+  plt.plot(srange, utrue_range, label='true payoff')
+  colors = ['b', 'g', 'r', 'k', 'y']
+  for i in range(len(mu_f_post_list)):
+    # trace = traces[i]
+    color = colors[i]
+    mu_f = mu_f_list[i]
+    mu_r = mu_r_list[i]
+    mu_f_post = mu_f_post_list[i]
+    sd_f_post = sd_f_post_list[i]
+    upost_range = np.array([u(s, mu_f_post=mu_f_post, sd_f_post=sd_f_post) for s in srange])
+    argmax_s = srange[np.argmax(upost_range)]
+    plt.plot(srange, upost_range,
+             label='(mu_f, mu_r)={}'.format((mu_f, mu_r)),
+             color=color)
+    plt.plot([argmax_s], [np.min(utrue_range)], marker='*', markersize=9,
+              color=color)
+  plt.title('Proposer payoffs under different splits')
+  plt.ylabel('(Posterior expected) payoff')
+  plt.xlabel('Proportion to Responder')
+  plt.legend(loc=1)
   plt.show()
 
 
