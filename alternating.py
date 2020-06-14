@@ -36,9 +36,10 @@ class WelfarePGLearner(nn.Module):
     self.num_actions = num_actions
     self.output_length = self.num_actions + 2
     self.fc1 = nn.Linear(input_length, 100)
+    self.fc5 = nn.Linear(100, 100)
     self.fc2 = nn.Linear(100, num_actions)
-    self.fc3 = nn.Linear(num_actions+1, 10)
-    self.fc4 = nn.Linear(10, self.output_length)
+    self.fc3 = nn.Linear(num_actions+1, 1)
+    self.fc4 = nn.Linear(2, self.output_length)
     self.episode_rewards = []
     self.probs = []
     self.rewards = []
@@ -48,16 +49,19 @@ class WelfarePGLearner(nn.Module):
     self.rewards = []
 
   def forward(self, x):
-    x = self.fc1(x)
-    x = F.relu(x)
-    reward_model = self.fc2(x)
-    reward_model = F.relu(reward_model)
-    x = T.cat((reward_model[0, :], x[:, -1]))
-    x = F.relu(x)
-    x = self.fc3(x)
-    x = self.fc4(x)
-    x = F.softmax(x)
-    return x
+    y = self.fc1(x)
+    y = F.relu(y)
+    y = self.fc5(y)
+    y = F.relu(y)
+    reward_model = self.fc2(y)
+    reward_model = F.softmax(reward_model)
+    y = T.cat((reward_model[0, :], x[:, -1]))
+    y = self.fc3(y)
+    y = F.relu(y)
+    y = T.cat((y, x[:, -1]))
+    y = self.fc4(y)
+    y = F.softmax(y)
+    return y
 
   def action(self, x):
     """
