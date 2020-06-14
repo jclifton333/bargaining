@@ -146,18 +146,41 @@ class PGLearner(nn.Module):
     return action, p, reward, done
 
 
-def train(policy_class=PGLearner, n=2, T=100, update_block_size=100, num_episodes=100000):
+def util(u1, u2):
+  return u1 + u2
+
+
+def nash(u1, u2):
+  return np.log(u1) + np.log(u2)
+
+
+def welfare_wrapper(welfare_name, u1, u2):
+  if welfare_name == 'util':
+    return util(u1, u2)
+  elif welfare_name == 'nash':
+    return nash(u1, u2)
+  elif welfare_name == 'random':
+    welf = np.random.choice([util, nash])
+    return welf(u1, u2)
+
+
+def train(welfare1='util', welfare2='util', policy_class=PGLearner, policies=None, n=2, T=100,
+          update_block_size=100, num_episodes=100000):
   # Train PGLearner against PGLearner
   num_actions = 3
 
-  input_size = n*3*3 + 1
-  policy1 = policy_class(input_size, num_actions)
-  policy1.double()
-  policy2 = policy_class(input_size, num_actions)
-  policy2.double()
+  if policies is None:
+    input_size = n*3*3 + 1
+    policy1 = policy_class(input_size, num_actions)
+    policy1.double()
+    policy2 = policy_class(input_size, num_actions)
+    policy2.double()
 
-  optimizer1 = optim.Adam(policy1.parameters(), lr=0.01)
-  optimizer2 = optim.Adam(policy2.parameters(), lr=0.01)
+    optimizer1 = optim.Adam(policy1.parameters(), lr=0.01)
+    optimizer2 = optim.Adam(policy2.parameters(), lr=0.01)
+  else:
+    policy1, policy2 = policies
+
   efficient_list = []
   efficient_mean_list = []
   cooperate_list = []
@@ -185,11 +208,14 @@ def train(policy_class=PGLearner, n=2, T=100, update_block_size=100, num_episode
     for t in range(T):
       # state = np.concatenate((history, [offer]))
       # state = np.concatenate((welfare_means, [offer]))
-      state = np.concatenate((expected_payoffs_1+expected_payoffs_2, [offer]))
+      welfare1_t = welfare_wrapper(welfare1, expected_payoffs_1, expected_payoffs_2)
+      welfare2_t = welfare_wrapper(welfare2, expected_payoffs_1, expected_payoffs_2)
+      state1 = np.concatenate((welfare1_t, [offer]))
+      state2 = np.concatenate((welfare2_t, [offer]))
       if t % 2 == 0:  # Take turns
-        action, p, reward, done = policy1.step(state, expected_payoffs_1)
+        action, p, reward, done = policy1.step(state1, expected_payoffs_1)
       else:
-        action, p, reward, done = policy2.step(state, expected_payoffs_2)
+        action, p, reward, done = policy2.step(state2, expected_payoffs_2)
       if done:
         break
       else:
@@ -218,22 +244,23 @@ def train(policy_class=PGLearner, n=2, T=100, update_block_size=100, num_episode
     print(t, cooperate_pct)
 
     # Take turns updating policies
-    if (episode // update_block_size) % 2 == 0:
-      loss1 += compute_loss(policy1.probs, policy1.rewards)
-      if episode % 10 == 0:
-        optimizer1.zero_grad()
-        if loss1 > 0:
-          loss1.backward()
-          optimizer1.step()
-        loss1 = 0
-    else:
-      loss2 += compute_loss(policy2.probs, policy2.rewards)
-      if episode % 10 == 0:
-        optimizer2.zero_grad()
-        if loss2 > 0:
-          loss2.backward()
-          optimizer2.step()
-        loss2 = 0
+    if policies is None:
+      if (episode // update_block_size) % 2 == 0:
+        loss1 += compute_loss(policy1.probs, policy1.rewards)
+        if episode % 10 == 0:
+          optimizer1.zero_grad()
+          if loss1 > 0:
+            loss1.backward()
+            optimizer1.step()
+          loss1 = 0
+      else:
+        loss2 += compute_loss(policy2.probs, policy2.rewards)
+        if episode % 10 == 0:
+          optimizer2.zero_grad()
+          if loss2 > 0:
+            loss2.backward()
+            optimizer2.step()
+          loss2 = 0
     policy1.reset()
     policy2.reset()
 
@@ -242,46 +269,28 @@ def train(policy_class=PGLearner, n=2, T=100, update_block_size=100, num_episode
 
 if __name__ == "__main__":
   np.random.seed(1)
-  ts_naive_mean = []
-  ts_welfare_100_mean = []
-  ts_welfare_200_mean = []
-  t_naive_mean = []
-  t_welfare_100_mean = []
-  for rep in range(10):
-    _, _, ts_naive, t_list_naive = train(policy_class=PGLearner, n=200, T=100, update_block_size=100, num_episodes=1000)
-    _, _, ts_welfare_100, t_list_welfare_100 = train(policy_class=WelfarePGLearner, n=200, T=100, update_block_size=100, num_episodes=1000)
-    # _, _, ts_welfare_200 = train(policy_class=WelfarePGLearner, n=200, T=100, update_block_size=200, num_episodes=2500)
-    ts_naive_mean.append(ts_naive)
-    ts_welfare_100_mean.append(ts_welfare_100)
-    t_naive_mean.append(t_list_naive)
-    t_welfare_100_mean.append(t_list_welfare_100)
-    # ts_welfare_200_mean.append(ts_welfare_200)
-  ts_naive_mean = np.mean(ts_naive_mean, axis=0)
-  ts_welfare_100_mean = np.mean(ts_welfare_100_mean, axis=0)
-  t_naive_mean = np.mean(t_naive_mean, axis=0)
-  t_welfare_100_mean = np.mean(t_welfare_100_mean, axis=0)
-  # ts_welfare_200_mean = np.mean(ts_welfare_200_mean, axis=0)
-  plt.plot(ts_naive_mean, label='naive')
-  plt.plot(ts_welfare_100_mean, label='welfare_100')
-  # plt.plot(ts_welfare_200_mean, label='welfare_200')
+  n_rep = 10
+  cooperate_ts_ur_train_mean = []
+  cooperate_ts_nr_train_mean = []
+  cooperate_ts_test_mean = []
+  for rep in range(n_rep):
+    policy1_ur, policy2_ur, cooperate_ts_ur, _ = \
+      train(welfare2='random', policy_class=WelfarePGLearner, n=100, T=100, update_block_size=100, num_episodes=1000)
+    policy1_nr, policy2_nr, cooperate_ts_nr, _ = \
+      train(welfare1='nash', welfare2='random', policy_class=WelfarePGLearner, n=100, T=100, update_block_size=100,
+            num_episodes=1000)
+    _, _, cooperate_ts_test, resolve_time_ts_test = \
+      train(welfare1='util', welfare2='nash', policies=(policy1_ur, policy1_nr), n=100, T=100, update_block_size=100,
+            num_episodes=1000)
+    cooperate_ts_ur_train_mean.append(cooperate_ts_ur)
+    cooperate_ts_nr_train_mean.append(cooperate_ts_nr)
+    cooperate_ts_test_mean.append(cooperate_ts_test)
+
+  cooperate_ts_ur_train_mean = np.mean(cooperate_ts_ur_train_mean, axis=0)
+  cooperate_ts_nr_train_mean = np.mean(cooperate_ts_nr_train_mean, axis=0)
+  cooperate_ts_test_mean = np.mean(cooperate_ts_test_mean, axis=0)
+  plt.plot(cooperate_ts_ur_train_mean, label='train_ur')
+  plt.plot(cooperate_ts_nr_train_mean, label='train_nr')
+  plt.plot(cooperate_ts_test_mean, label='test')
   plt.legend()
   plt.show()
-  plt.plot(t_naive_mean, label='naive')
-  plt.plot(t_welfare_100_mean, label='welfare_100')
-  # plt.plot(t_welfare_200_mean, label='welfare_200')
-  plt.legend()
-  plt.show()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
