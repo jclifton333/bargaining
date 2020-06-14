@@ -34,6 +34,7 @@ def normal_posterior(x, mu_f, mu_r, sigma_f=1, sigma_r=1., sigma=1):
   return None, mu_f_post, sigma_f_post
 
 
+
 if __name__ == "__main__":
   mu_f = 0.05
   mu_r = 0.15
@@ -45,7 +46,7 @@ if __name__ == "__main__":
   f_true = 0.15
   r_true = 0.05
   f_plus_r = f_true + r_true
-  n = 1000
+  n = 10000
   s = np.random.uniform(0.0, 0.4, size=n)
   y = np.random.normal(loc=s-f_plus_r, scale=0.01, size=n)
   x = s-y
@@ -82,14 +83,13 @@ if __name__ == "__main__":
   def u(s, mu_f_post=None, sd_f_post=None, f=None):
     # Posterior predictive payoff for s
     if f is None:
-      mu_f = np.random.normal(loc=mu_f_post, scale=sd_f_post, size=100)
-      x_f = np.random.normal(loc=mu_f, scale=0.01)
-      opponent_utility = s - x_f*(s < 0.4)
-      payoff_dist = (1-s)*(opponent_utility > 0)
-      payoff_mean = np.mean(payoff_dist)
+      mu_f = np.random.normal(loc=mu_f_post, scale=sd_f_post, size=1000)
     else:
-      opponent_utility = s - f*(s < 0.4)
-      payoff_mean = (1-s)*(opponent_utility > 0)
+      mu_f = f*np.ones(1000)
+    x_f = np.random.normal(loc=mu_f, scale=sigma)
+    opponent_utility = s - x_f*(s < 0.4)
+    payoff_dist = (1-s)*(opponent_utility > 0)
+    payoff_mean = np.mean(payoff_dist)
     return payoff_mean
 
   srange = np.linspace(0, 1., 20)

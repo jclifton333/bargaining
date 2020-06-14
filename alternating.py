@@ -35,9 +35,9 @@ class WelfarePGLearner(nn.Module):
     super(WelfarePGLearner, self).__init__()
     self.num_actions = num_actions
     self.output_length = self.num_actions + 2
-    self.fc1 = nn.Linear(input_length, 100)
-    self.fc5 = nn.Linear(100, 100)
-    self.fc2 = nn.Linear(100, num_actions)
+    self.fc1 = nn.Linear(input_length, 10)
+    self.fc5 = nn.Linear(10, 10)
+    self.fc2 = nn.Linear(10, num_actions)
     self.fc3 = nn.Linear(num_actions+1, 1)
     self.fc4 = nn.Linear(2, self.output_length)
     self.episode_rewards = []
@@ -77,7 +77,10 @@ class WelfarePGLearner(nn.Module):
     action, p = self.action(x)
     offer = x[-1]
     if action == self.num_actions:  # Accept
-      reward = payoffs[int(offer)]
+      if offer < self.num_actions:
+        reward = payoffs[int(offer)]
+      else:
+        reward = 0
       done = True
     elif action == self.num_actions + 1:  # Reject
       reward = 0.
@@ -131,7 +134,10 @@ class PGLearner(nn.Module):
     action, p = self.action(x)
     offer = x[-1]
     if action == self.num_actions:  # Accept
-      reward = payoffs[int(offer)]
+      if offer < self.num_actions:
+        reward = payoffs[int(offer)]
+      else:
+        reward = 0
       done = True
     elif action == self.num_actions + 1:  # Reject
       reward = 0.
@@ -162,7 +168,7 @@ def train(policy_class=PGLearner, n=2, T=100, num_episodes=100000):
   loss2 = 0
 
   for episode in range(num_episodes):
-    offer = np.random.choice(range(num_actions), p=np.ones(num_actions)/num_actions)
+    offer = num_actions + 1
     history = []
     expected_payoffs_1 = np.random.poisson(lam=5, size=num_actions)
     expected_payoffs_2 = np.random.poisson(lam=5, size=num_actions)
@@ -183,7 +189,7 @@ def train(policy_class=PGLearner, n=2, T=100, num_episodes=100000):
       else:
         offer = action
 
-    if action == num_actions + 1:
+    if action == num_actions + 1 or offer > num_actions:
       efficient = False
     else:
       offer = int(offer)
@@ -234,14 +240,14 @@ if __name__ == "__main__":
   np.random.seed(1)
   ts_naive_mean = []
   ts_welfare_mean = []
-  for rep in range(20):
-    _, _, ts_naive = train(policy_class=PGLearner, n=100, T=100, num_episodes=1000)
-    _, _, ts_welfare = train(policy_class=WelfarePGLearner, n=100, T=100, num_episodes=1000)
-    ts_naive_mean.append(ts_naive)
+  for rep in range(10):
+    # _, _, ts_naive = train(policy_class=PGLearner, n=200, T=100, num_episodes=1000)
+    _, _, ts_welfare = train(policy_class=WelfarePGLearner, n=200, T=100, num_episodes=2000)
+    # ts_naive_mean.append(ts_naive)
     ts_welfare_mean.append(ts_welfare)
-  ts_naive_mean = np.mean(ts_naive_mean, axis=0)
+  # ts_naive_mean = np.mean(ts_naive_mean, axis=0)
   ts_welfare_mean = np.mean(ts_welfare_mean, axis=0)
-  plt.plot(ts_naive_mean, label='naive')
+  # plt.plot(ts_naive_mean, label='naive')
   plt.plot(ts_welfare_mean, label='welfare')
   plt.legend()
   plt.show()
