@@ -35,11 +35,9 @@ class WelfarePGLearner(nn.Module):
     super(WelfarePGLearner, self).__init__()
     self.num_actions = num_actions
     self.output_length = self.num_actions + 2
-    self.fc1 = nn.Linear(input_length, 10)
-    self.fc5 = nn.Linear(10, 10)
-    self.fc2 = nn.Linear(10, num_actions)
-    self.fc3 = nn.Linear(num_actions+1, 1)
-    self.fc4 = nn.Linear(2, self.output_length)
+    self.fc1 = nn.Linear(2, 10)
+    self.fc2 = nn.Linear(10, 10)
+    self.fc3 = nn.Linear(10, self.output_length)
     self.episode_rewards = []
     self.probs = []
     self.rewards = []
@@ -51,15 +49,9 @@ class WelfarePGLearner(nn.Module):
   def forward(self, x):
     y = self.fc1(x)
     y = F.relu(y)
-    y = self.fc5(y)
+    y = self.fc2(y)
     y = F.relu(y)
-    reward_model = self.fc2(y)
-    reward_model = F.softmax(reward_model)
-    y = T.cat((reward_model[0, :], x[:, -1]))
     y = self.fc3(y)
-    y = F.relu(y)
-    y = T.cat((y, x[:, -1]))
-    y = self.fc4(y)
     y = F.softmax(y)
     return y
 
@@ -67,6 +59,9 @@ class WelfarePGLearner(nn.Module):
     """
     :param x: array of form [(a^t, u1^t, u2^t)_{t=1}^T | offer]
     """
+    argmax_utils = np.argmax(x[:-1])
+    argmax_equals_offer = [argmax_utils == x[-1]]
+    x = np.concatenate([argmax_equals_offer, [x[-1]]])
     x = T.from_numpy(x).double().unsqueeze(0)
     probs = self.forward(x)
     m = Categorical(probs)
@@ -98,7 +93,7 @@ class PGLearner(nn.Module):
     super(PGLearner, self).__init__()
     self.num_actions = num_actions
     self.output_length = self.num_actions + 2
-    self.fc1 = nn.Linear(input_length, 100)
+    self.fc1 = nn.Linear(num_actions+1, 100)
     # self.fc1 = nn.Linear(num_actions, 48)
     self.fc2 = nn.Linear(100, 100)
     self.fc3 = nn.Linear(100, self.output_length)
@@ -124,6 +119,7 @@ class PGLearner(nn.Module):
     """
     :param x: array of form [(a^t, u1^t, u2^t)_{t=1}^T | offer]
     """
+
     x = T.from_numpy(x).double().unsqueeze(0)
     probs = self.forward(x)
     m = Categorical(probs)
@@ -150,7 +146,7 @@ class PGLearner(nn.Module):
     return action, p, reward, done
 
 
-def train(policy_class=PGLearner, n=2, T=100, num_episodes=100000):
+def train(policy_class=PGLearner, n=2, T=100, update_block_size=100, num_episodes=100000):
   # Train PGLearner against PGLearner
   num_actions = 3
 
@@ -164,22 +160,32 @@ def train(policy_class=PGLearner, n=2, T=100, num_episodes=100000):
   optimizer2 = optim.Adam(policy2.parameters(), lr=0.01)
   efficient_list = []
   efficient_mean_list = []
+  cooperate_list = []
+  cooperate_mean_list = []
+  t_list = []
   loss1 = 0
   loss2 = 0
 
   for episode in range(num_episodes):
     offer = num_actions + 1
     history = []
+    welfare_means = np.zeros(num_actions)
     expected_payoffs_1 = np.random.poisson(lam=5, size=num_actions)
     expected_payoffs_2 = np.random.poisson(lam=5, size=num_actions)
     for i in range(n):
       for j in range(num_actions):
         history.append(j)
-        history.append(expected_payoffs_1[j] + np.random.normal(scale=2))
-        history.append(expected_payoffs_2[j] + np.random.normal(scale=2))
+        payoff_1 = expected_payoffs_1[j] + np.random.normal(scale=2)
+        payoff_2 = expected_payoffs_2[j] + np.random.normal(scale=2)
+        history.append(payoff_1)
+        history.append(payoff_2)
+        welfare_means[j] += (payoff_1 + payoff_2)
+    welfare_means /= n
 
     for t in range(T):
-      state = np.concatenate((history, [offer]))
+      # state = np.concatenate((history, [offer]))
+      # state = np.concatenate((welfare_means, [offer]))
+      state = np.concatenate((expected_payoffs_1+expected_payoffs_2, [offer]))
       if t % 2 == 0:  # Take turns
         action, p, reward, done = policy1.step(state, expected_payoffs_1)
       else:
@@ -189,9 +195,11 @@ def train(policy_class=PGLearner, n=2, T=100, num_episodes=100000):
       else:
         offer = action
 
-    if action == num_actions + 1 or offer > num_actions:
+    if action == num_actions + 1 or offer > num_actions or t == T-1:
       efficient = False
+      cooperate = False
     else:
+      cooperate = True
       offer = int(offer)
       u1, u2 = expected_payoffs_1[offer], expected_payoffs_2[offer]
       for u1_, u2_ in zip(expected_payoffs_1, expected_payoffs_2):
@@ -200,57 +208,70 @@ def train(policy_class=PGLearner, n=2, T=100, num_episodes=100000):
           break
         else:
           efficient = True
+    cooperate_list.append(cooperate)
     efficient_list.append(efficient)
+    cooperate_pct = np.mean(cooperate_list[-10:])
     efficient_pct = np.mean(efficient_list[-10:])
+    cooperate_mean_list.append(cooperate_pct)
     efficient_mean_list.append(efficient_pct)
-    print(t, efficient_pct)
+    t_list.append(t)
+    print(t, cooperate_pct)
 
-    loss1 += compute_loss(policy1.probs, policy1.rewards)
-    loss2 += compute_loss(policy2.probs, policy2.rewards)
-    if episode % 10 == 0:
-      optimizer1.zero_grad()
-      if loss1 > 0:
-        loss1.backward()
-        optimizer1.step()
-      loss1 = 0
-      optimizer2.zero_grad()
-      if loss2 > 0:
-        loss2.backward()
-        optimizer2.step()
-      loss2 = 0
+    # Take turns updating policies
+    if (episode // update_block_size) % 2 == 0:
+      loss1 += compute_loss(policy1.probs, policy1.rewards)
+      if episode % 10 == 0:
+        optimizer1.zero_grad()
+        if loss1 > 0:
+          loss1.backward()
+          optimizer1.step()
+        loss1 = 0
+    else:
+      loss2 += compute_loss(policy2.probs, policy2.rewards)
+      if episode % 10 == 0:
+        optimizer2.zero_grad()
+        if loss2 > 0:
+          loss2.backward()
+          optimizer2.step()
+        loss2 = 0
     policy1.reset()
     policy2.reset()
 
-  return policy1, policy2, efficient_mean_list
-
-
-def util_each_action(x, num_actions):
-  util = np.zeros(num_actions)
-  j = 0
-  for i, z in enumerate(x[:-1]):
-    if i % num_actions != 0:
-      util[j] += z
-      j += 1
-    if j >= num_actions:
-      j = 0
-  return util
+  return policy1, policy2, cooperate_mean_list, t_list
 
 
 if __name__ == "__main__":
   np.random.seed(1)
   ts_naive_mean = []
-  ts_welfare_mean = []
+  ts_welfare_100_mean = []
+  ts_welfare_200_mean = []
+  t_naive_mean = []
+  t_welfare_100_mean = []
   for rep in range(10):
-    # _, _, ts_naive = train(policy_class=PGLearner, n=200, T=100, num_episodes=1000)
-    _, _, ts_welfare = train(policy_class=WelfarePGLearner, n=200, T=100, num_episodes=2000)
-    # ts_naive_mean.append(ts_naive)
-    ts_welfare_mean.append(ts_welfare)
-  # ts_naive_mean = np.mean(ts_naive_mean, axis=0)
-  ts_welfare_mean = np.mean(ts_welfare_mean, axis=0)
-  # plt.plot(ts_naive_mean, label='naive')
-  plt.plot(ts_welfare_mean, label='welfare')
+    _, _, ts_naive, t_list_naive = train(policy_class=PGLearner, n=200, T=100, update_block_size=100, num_episodes=1000)
+    _, _, ts_welfare_100, t_list_welfare_100 = train(policy_class=WelfarePGLearner, n=200, T=100, update_block_size=100, num_episodes=1000)
+    # _, _, ts_welfare_200 = train(policy_class=WelfarePGLearner, n=200, T=100, update_block_size=200, num_episodes=2500)
+    ts_naive_mean.append(ts_naive)
+    ts_welfare_100_mean.append(ts_welfare_100)
+    t_naive_mean.append(t_list_naive)
+    t_welfare_100_mean.append(t_list_welfare_100)
+    # ts_welfare_200_mean.append(ts_welfare_200)
+  ts_naive_mean = np.mean(ts_naive_mean, axis=0)
+  ts_welfare_100_mean = np.mean(ts_welfare_100_mean, axis=0)
+  t_naive_mean = np.mean(t_naive_mean, axis=0)
+  t_welfare_100_mean = np.mean(t_welfare_100_mean, axis=0)
+  # ts_welfare_200_mean = np.mean(ts_welfare_200_mean, axis=0)
+  plt.plot(ts_naive_mean, label='naive')
+  plt.plot(ts_welfare_100_mean, label='welfare_100')
+  # plt.plot(ts_welfare_200_mean, label='welfare_200')
   plt.legend()
   plt.show()
+  plt.plot(t_naive_mean, label='naive')
+  plt.plot(t_welfare_100_mean, label='welfare_100')
+  # plt.plot(t_welfare_200_mean, label='welfare_200')
+  plt.legend()
+  plt.show()
+
 
 
 
