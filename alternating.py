@@ -105,7 +105,7 @@ class ContinuousPGLearner(BasicPGLearner):
     self.message_length = message_length
     self.fc1 = nn.Linear(self.message_length + 1, 100)
     self.fc2 = nn.Linear(100, 100)
-    self.fc3 = nn.Linear(100, 2*self.message_length + self.num_actions)
+    self.fc3 = nn.Linear(100, 2*self.message_length + self.num_actions + 2)
 
   def forward(self, x):
     x = self.fc1(x)
@@ -191,9 +191,9 @@ def train(welfare1='util', welfare2='util', policy_class=PGLearner, policies=Non
   if policies is None:
     # input_size = n*num_actions*3 + 1
     message_length = num_actions
-    policy1 = policy_class(num_actions, num_actions)
+    policy1 = policy_class(message_length, num_actions)
     policy1.double()
-    policy2 = policy_class(num_actions, num_actions)
+    policy2 = policy_class(message_length, num_actions)
     policy2.double()
 
     optimizer1 = optim.Adam(policy1.parameters(), lr=0.01)
@@ -211,7 +211,6 @@ def train(welfare1='util', welfare2='util', policy_class=PGLearner, policies=Non
 
   for episode in range(num_episodes):
     offer = num_actions + 1.
-    message_and_action = T.cat((T.ones(num_actions), T.tensor([offer])))
     history = []
     welfare_means = np.zeros(num_actions)
     expected_payoffs_1 = np.random.poisson(lam=5, size=num_actions)
@@ -233,8 +232,13 @@ def train(welfare1='util', welfare2='util', policy_class=PGLearner, policies=Non
       welfare2_t = welfare_wrapper(welfare2, expected_payoffs_1, expected_payoffs_2)
       # state1 = np.concatenate((welfare1_t, message_and_action))
       # state2 = np.concatenate((welfare2_t, message_and_action))
-      state1 = message_and_action
-      state2 = message_and_action
+      message_and_action = T.ones(num_actions).double()
+      state1 = T.cat((message_and_action, T.tensor([offer]).double()))
+      state2 = T.cat((message_and_action, T.tensor([offer]).double()))
+      # welfare_eq_1 = T.from_numpy(np.array([np.all(welfare1_t == message_and_action.detach().numpy())])).double()
+      # state1 = T.cat((welfare_eq_1, message_and_action, T.tensor([offer]).double()))
+      # welfare_eq_2 = T.from_numpy(np.array([np.all(welfare2_t == message_and_action.detach().numpy())])).double()
+      # state2 = T.cat((welfare_eq_2, message_and_action, T.tensor([offer]).double()))
       if t % 2 == 0:  # Take turns
         message_and_action, p, reward, done = policy1.step(state1, expected_payoffs_1)
       else:
@@ -292,16 +296,17 @@ def train(welfare1='util', welfare2='util', policy_class=PGLearner, policies=Non
 
 if __name__ == "__main__":
   # ToDo: Implement messages
+  # ToDo: reward agents for Pareto-optimal outcome?
 
   np.random.seed(1)
   n_rep = 10
   cooperate_ts_ur_train_mean = []
   cooperate_ts_nr_train_mean = []
   cooperate_ts_test_mean = []
-  num_episodes = 10
+  num_episodes = 100000
   for rep in range(n_rep):
     policy1_ur, policy2_ur, cooperate_ts_ur, _ = \
-      train(welfare2='random', policy_class=ContinuousPGLearner, n=100, horizon=100, update_block_size=100,
+      train(policy_class=ContinuousPGLearner, n=100, horizon=100, update_block_size=300,
             num_episodes=num_episodes)
     cooperate_ts_ur_train_mean.append(cooperate_ts_ur)
 
