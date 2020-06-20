@@ -5,6 +5,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 import matplotlib.pyplot as plt
 from torch.distributions.categorical import Categorical
+from torch.distributions.normal import Normal
 import pdb
 
 
@@ -30,14 +31,9 @@ def compute_loss(probs, rewards, gamma=0.99):
 
 
 # ToDo: PGLearner superclass
-class WelfarePGLearner(nn.Module):
-  def __init__(self, input_length, num_actions):
-    super(WelfarePGLearner, self).__init__()
-    self.num_actions = num_actions
-    self.output_length = self.num_actions + 2
-    self.fc1 = nn.Linear(2, 10)
-    self.fc2 = nn.Linear(10, 10)
-    self.fc3 = nn.Linear(10, self.output_length)
+class BasicPGLearner(nn.Module):
+  def __init__(self):
+    super(BasicPGLearner, self).__init__()
     self.episode_rewards = []
     self.probs = []
     self.rewards = []
@@ -45,6 +41,36 @@ class WelfarePGLearner(nn.Module):
   def reset(self):
     self.probs = []
     self.rewards = []
+
+  def step(self, x, payoffs):
+    message_and_action, p = self.action(x)
+    action = message_and_action[-1]
+    offer = x[-1]
+    if action == self.num_actions:  # Accept
+      if offer < self.num_actions:
+        reward = payoffs[int(offer)]
+      else:
+        reward = 0
+      done = True
+    elif action == self.num_actions + 1:  # Reject
+      reward = 0.
+      done = True
+    else:  # Counteroffer
+      reward = 0.
+      done = False
+    self.rewards.append(reward)
+    self.probs.append(p)
+    return message_and_action, p, reward, done
+
+
+class WelfarePGLearner(BasicPGLearner):
+  def __init__(self, input_length, num_actions):
+    super(WelfarePGLearner, self).__init__()
+    self.num_actions = num_actions
+    self.output_length = self.num_actions + 2
+    self.fc1 = nn.Linear(2, 10)
+    self.fc2 = nn.Linear(10, 10)
+    self.fc3 = nn.Linear(10, self.output_length)
 
   def forward(self, x):
     y = self.fc1(x)
@@ -68,27 +94,45 @@ class WelfarePGLearner(nn.Module):
     action = m.sample()
     return action.item(), m.log_prob(action)
 
-  def step(self, x, payoffs):
-    action, p = self.action(x)
-    offer = x[-1]
-    if action == self.num_actions:  # Accept
-      if offer < self.num_actions:
-        reward = payoffs[int(offer)]
-      else:
-        reward = 0
-      done = True
-    elif action == self.num_actions + 1:  # Reject
-      reward = 0.
-      done = True
-    else:  # Counteroffer
-      reward = 0.
-      done = False
-    self.rewards.append(reward)
-    self.probs.append(p)
-    return action, p, reward, done
+
+class ContinuousPGLearner(BasicPGLearner):
+  """
+  Output a continuous-valued message and a prob dbn over actions.
+  """
+  def __init__(self, message_length, num_actions):
+    super(ContinuousPGLearner, self).__init__()
+    self.num_actions = num_actions
+    self.message_length = message_length
+    self.fc1 = nn.Linear(num_actions + 1, 100)
+    self.fc2 = nn.Linear(100, 100)
+    self.fc3 = nn.Linear(100, 2*self.message_length + self.num_actions)
+
+  def forward(self, x):
+    x = self.fc1(x)
+    x = F.relu(x)
+    x = self.fc2(x)
+    x = F.relu(x)
+    x = self.fc3(x)
+    message_means = x[:, :self.message_length]
+    message_sds = x[:, self.message_length:(2*self.message_length)]
+    message_sds = nn.Threshold(0.01, 0.01)(message_sds)
+    action_logits = x[:, (2*self.message_length):]
+    action_probs = F.softmax(action_logits)
+    return message_means, message_sds, action_probs
+
+  def action(self, x):
+    x = T.from_numpy(x).double().unsqueeze(0)
+    message_means, message_sds, action_probs = self.forward(x)
+    action_dbn = Categorical(action_probs)
+    action = action_dbn.sample()
+    message_dbn = Normal(message_means, message_sds)
+    message = message_dbn.sample()
+    log_prob = action_dbn.log_prob(action) + message_dbn.log_prob(message)
+    x = T.cat([message.item(), action.item()])
+    return x, log_prob
 
 
-class PGLearner(nn.Module):
+class PGLearner(BasicPGLearner):
   def __init__(self, input_length, num_actions):
     super(PGLearner, self).__init__()
     self.num_actions = num_actions
@@ -97,13 +141,6 @@ class PGLearner(nn.Module):
     # self.fc1 = nn.Linear(num_actions, 48)
     self.fc2 = nn.Linear(100, 100)
     self.fc3 = nn.Linear(100, self.output_length)
-    self.episode_rewards = []
-    self.probs = []
-    self.rewards = []
-
-  def reset(self):
-    self.probs = []
-    self.rewards = []
 
   def forward(self, x):
     # x = T.from_numpy(util_each_action(x, self.num_actions))  # Give it some help
@@ -125,25 +162,6 @@ class PGLearner(nn.Module):
     m = Categorical(probs)
     action = m.sample()
     return action.item(), m.log_prob(action)
-
-  def step(self, x, payoffs):
-    action, p = self.action(x)
-    offer = x[-1]
-    if action == self.num_actions:  # Accept
-      if offer < self.num_actions:
-        reward = payoffs[int(offer)]
-      else:
-        reward = 0
-      done = True
-    elif action == self.num_actions + 1:  # Reject
-      reward = 0.
-      done = True
-    else:  # Counteroffer
-      reward = 0.
-      done = False
-    self.rewards.append(reward)
-    self.probs.append(p)
-    return action, p, reward, done
 
 
 def util(u1, u2):
@@ -170,7 +188,7 @@ def train(welfare1='util', welfare2='util', policy_class=PGLearner, policies=Non
   num_actions = 3
 
   if policies is None:
-    input_size = n*3*3 + 1
+    input_size = n*num_actions*3 + 1
     policy1 = policy_class(input_size, num_actions)
     policy1.double()
     policy2 = policy_class(input_size, num_actions)
@@ -191,6 +209,7 @@ def train(welfare1='util', welfare2='util', policy_class=PGLearner, policies=Non
 
   for episode in range(num_episodes):
     offer = num_actions + 1
+    message_and_action = T.cat((np.ones(num_actions*2), [offer]))
     history = []
     welfare_means = np.zeros(num_actions)
     expected_payoffs_1 = np.random.poisson(lam=5, size=num_actions)
@@ -210,18 +229,18 @@ def train(welfare1='util', welfare2='util', policy_class=PGLearner, policies=Non
       # state = np.concatenate((welfare_means, [offer]))
       welfare1_t = welfare_wrapper(welfare1, expected_payoffs_1, expected_payoffs_2)
       welfare2_t = welfare_wrapper(welfare2, expected_payoffs_1, expected_payoffs_2)
-      state1 = np.concatenate((welfare1_t, [offer]))
-      state2 = np.concatenate((welfare2_t, [offer]))
+      state1 = np.concatenate((welfare1_t, message_and_action))
+      state2 = np.concatenate((welfare2_t, message_and_action))
       if t % 2 == 0:  # Take turns
-        action, p, reward, done = policy1.step(state1, expected_payoffs_1)
+        message_and_action, p, reward, done = policy1.step(state1, expected_payoffs_1)
       else:
-        action, p, reward, done = policy2.step(state2, expected_payoffs_2)
+        message_and_action, p, reward, done = policy2.step(state2, expected_payoffs_2)
       if done:
         break
       else:
-        offer = action
+        offer = message_and_action[-1]
 
-    if action == num_actions + 1 or offer > num_actions or t == T-1:
+    if offer == num_actions + 1 or offer > num_actions or t == T-1:
       efficient = False
       cooperate = False
     else:
@@ -268,29 +287,21 @@ def train(welfare1='util', welfare2='util', policy_class=PGLearner, policies=Non
 
 
 if __name__ == "__main__":
+  # ToDo: Implement messages
+
   np.random.seed(1)
   n_rep = 10
   cooperate_ts_ur_train_mean = []
   cooperate_ts_nr_train_mean = []
   cooperate_ts_test_mean = []
+  num_episodes = 10
   for rep in range(n_rep):
     policy1_ur, policy2_ur, cooperate_ts_ur, _ = \
-      train(welfare2='random', policy_class=WelfarePGLearner, n=100, T=100, update_block_size=100, num_episodes=1000)
-    policy1_nr, policy2_nr, cooperate_ts_nr, _ = \
-      train(welfare1='nash', welfare2='random', policy_class=WelfarePGLearner, n=100, T=100, update_block_size=100,
-            num_episodes=1000)
-    _, _, cooperate_ts_test, resolve_time_ts_test = \
-      train(welfare1='util', welfare2='nash', policies=(policy1_ur, policy1_nr), n=100, T=100, update_block_size=100,
-            num_episodes=1000)
+      train(welfare2='random', policy_class=ContinuousPGLearner, n=100, T=100, update_block_size=100,
+            num_episodes=num_episodes)
     cooperate_ts_ur_train_mean.append(cooperate_ts_ur)
-    cooperate_ts_nr_train_mean.append(cooperate_ts_nr)
-    cooperate_ts_test_mean.append(cooperate_ts_test)
 
   cooperate_ts_ur_train_mean = np.mean(cooperate_ts_ur_train_mean, axis=0)
-  cooperate_ts_nr_train_mean = np.mean(cooperate_ts_nr_train_mean, axis=0)
-  cooperate_ts_test_mean = np.mean(cooperate_ts_test_mean, axis=0)
   plt.plot(cooperate_ts_ur_train_mean, label='train_ur')
-  plt.plot(cooperate_ts_nr_train_mean, label='train_nr')
-  plt.plot(cooperate_ts_test_mean, label='test')
   plt.legend()
   plt.show()
