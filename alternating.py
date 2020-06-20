@@ -103,7 +103,7 @@ class ContinuousPGLearner(BasicPGLearner):
     super(ContinuousPGLearner, self).__init__()
     self.num_actions = num_actions
     self.message_length = message_length
-    self.fc1 = nn.Linear(num_actions + 1, 100)
+    self.fc1 = nn.Linear(self.message_length + 1, 100)
     self.fc2 = nn.Linear(100, 100)
     self.fc3 = nn.Linear(100, 2*self.message_length + self.num_actions)
 
@@ -121,14 +121,15 @@ class ContinuousPGLearner(BasicPGLearner):
     return message_means, message_sds, action_probs
 
   def action(self, x):
-    x = T.from_numpy(x).double().unsqueeze(0)
+    # x = T.from_numpy(x).double().unsqueeze(0)
+    x = x.double().unsqueeze(0)
     message_means, message_sds, action_probs = self.forward(x)
     action_dbn = Categorical(action_probs)
     action = action_dbn.sample()
     message_dbn = Normal(message_means, message_sds)
     message = message_dbn.sample()
-    log_prob = action_dbn.log_prob(action) + message_dbn.log_prob(message)
-    x = T.cat([message.item(), action.item()])
+    log_prob = action_dbn.log_prob(action) + message_dbn.log_prob(message).sum()
+    x = T.cat((message[0, :], action.double()))
     return x, log_prob
 
 
@@ -182,16 +183,17 @@ def welfare_wrapper(welfare_name, u1, u2):
     return welf(u1, u2)
 
 
-def train(welfare1='util', welfare2='util', policy_class=PGLearner, policies=None, n=2, T=100,
+def train(welfare1='util', welfare2='util', policy_class=PGLearner, policies=None, n=2, horizon=100,
           update_block_size=100, num_episodes=100000):
   # Train PGLearner against PGLearner
   num_actions = 3
 
   if policies is None:
-    input_size = n*num_actions*3 + 1
-    policy1 = policy_class(input_size, num_actions)
+    # input_size = n*num_actions*3 + 1
+    message_length = num_actions
+    policy1 = policy_class(num_actions, num_actions)
     policy1.double()
-    policy2 = policy_class(input_size, num_actions)
+    policy2 = policy_class(num_actions, num_actions)
     policy2.double()
 
     optimizer1 = optim.Adam(policy1.parameters(), lr=0.01)
@@ -208,8 +210,8 @@ def train(welfare1='util', welfare2='util', policy_class=PGLearner, policies=Non
   loss2 = 0
 
   for episode in range(num_episodes):
-    offer = num_actions + 1
-    message_and_action = T.cat((np.ones(num_actions*2), [offer]))
+    offer = num_actions + 1.
+    message_and_action = T.cat((T.ones(num_actions), T.tensor([offer])))
     history = []
     welfare_means = np.zeros(num_actions)
     expected_payoffs_1 = np.random.poisson(lam=5, size=num_actions)
@@ -224,13 +226,15 @@ def train(welfare1='util', welfare2='util', policy_class=PGLearner, policies=Non
         welfare_means[j] += (payoff_1 + payoff_2)
     welfare_means /= n
 
-    for t in range(T):
+    for t in range(horizon):
       # state = np.concatenate((history, [offer]))
       # state = np.concatenate((welfare_means, [offer]))
       welfare1_t = welfare_wrapper(welfare1, expected_payoffs_1, expected_payoffs_2)
       welfare2_t = welfare_wrapper(welfare2, expected_payoffs_1, expected_payoffs_2)
-      state1 = np.concatenate((welfare1_t, message_and_action))
-      state2 = np.concatenate((welfare2_t, message_and_action))
+      # state1 = np.concatenate((welfare1_t, message_and_action))
+      # state2 = np.concatenate((welfare2_t, message_and_action))
+      state1 = message_and_action
+      state2 = message_and_action
       if t % 2 == 0:  # Take turns
         message_and_action, p, reward, done = policy1.step(state1, expected_payoffs_1)
       else:
@@ -240,7 +244,7 @@ def train(welfare1='util', welfare2='util', policy_class=PGLearner, policies=Non
       else:
         offer = message_and_action[-1]
 
-    if offer == num_actions + 1 or offer > num_actions or t == T-1:
+    if offer == num_actions + 1 or offer > num_actions or t == horizon-1:
       efficient = False
       cooperate = False
     else:
@@ -297,7 +301,7 @@ if __name__ == "__main__":
   num_episodes = 10
   for rep in range(n_rep):
     policy1_ur, policy2_ur, cooperate_ts_ur, _ = \
-      train(welfare2='random', policy_class=ContinuousPGLearner, n=100, T=100, update_block_size=100,
+      train(welfare2='random', policy_class=ContinuousPGLearner, n=100, horizon=100, update_block_size=100,
             num_episodes=num_episodes)
     cooperate_ts_ur_train_mean.append(cooperate_ts_ur)
 
