@@ -43,15 +43,20 @@ def get_welfare_optimal_observation(x_1, x_2, public_1, public_2, n_public, x_1_
 
 
 def alternating(n=5, sigma_u=1, sigma_x=20):
+  # Parameters
+  u1_mean = np.array([[-4, 0], [-5, -1]])
+  u2_mean = np.array([[-6, -5], [0, -1]])
+  sigma_x_mat = np.array([[sigma_x, sigma_x], [0., 0.]])
+
   # Generate true 2x2 payoffs
-  u1 = np.random.normal(scale=sigma_u, size=(2, 2))
-  u2 = np.random.normal(scale=sigma_u, size=(2, 2))
+  u1 = np.random.normal(loc=u1_mean, scale=sigma_u, size=(2, 2))
+  u2 = np.random.normal(loc=u2_mean, scale=sigma_u, size=(2, 2))
 
   # Generate obs
-  x1_1 = np.random.normal(loc=u1, scale=sigma_x, size=(n, 2, 2))
-  x1_2 = np.random.normal(loc=u2, scale=sigma_x, size=(n, 2, 2))
-  x2_1 = np.random.normal(loc=u1, scale=sigma_x, size=(n, 2, 2))
-  x2_2 = np.random.normal(loc=u2, scale=sigma_x, size=(n, 2, 2))
+  x1_1 = np.random.normal(loc=u1, scale=sigma_x_mat, size=(n, 2, 2))
+  x1_2 = np.random.normal(loc=u2, scale=sigma_x_mat, size=(n, 2, 2))
+  x2_1 = np.random.normal(loc=u1, scale=sigma_x_mat, size=(n, 2, 2))
+  x2_2 = np.random.normal(loc=u2, scale=sigma_x_mat, size=(n, 2, 2))
   x1_1_mean = x1_1.mean(axis=0)
   x1_2_mean = x1_2.mean(axis=0)
   x2_1_mean = x2_1.mean(axis=0)
@@ -112,8 +117,8 @@ if __name__ == "__main__":
   diff_1_lst = []
   diff_2_lst = []
   even_lst = []
-  for rep in range(100000):
-    diff_1, diff_2, even = alternating(sigma_x=2, n=2)
+  for rep in range(1000):
+    diff_1, diff_2, even = alternating(sigma_u=0, sigma_x=2, n=4)
     diff_1_lst.append(diff_1)
     diff_2_lst.append(diff_2)
     even_lst.append(even)
