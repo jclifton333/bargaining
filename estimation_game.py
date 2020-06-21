@@ -56,6 +56,10 @@ def alternating(n=5, sigma_u=1, sigma_x=20):
   x1_2_mean = x1_2.mean(axis=0)
   x2_1_mean = x2_1.mean(axis=0)
   x2_2_mean = x2_2.mean(axis=0)
+  # x1_1_std = x1_1.std(axis=0)
+  # x1_2_std = x1_2.std(axis=0)
+  # x2_1_std = x2_1.std(axis=0)
+  # x2_2_std = x2_2.std(axis=0)
 
   # Greedy alternating offers
   public_mean_1 = np.zeros((2, 2))
@@ -69,37 +73,29 @@ def alternating(n=5, sigma_u=1, sigma_x=20):
   # ToDo: rule for rejecting
   done = False
   t = 0
-  while t < n and not done:
+  while t < np.floor(n/2) and not done:
     best_payoff_1_t, best_obs_1, best_obs_2, best_ix_1, best_a1, best_a2 = \
       get_welfare_optimal_observation(x1_1, x1_2, public_mean_1, public_mean_2, len(ixs_1) + len(ixs_2), x1_1_mean,
                                       x1_2_mean, ixs_1)
-    if best_payoff_1_t > best_payoff_1:
-      public_mean_1 += (best_obs_1 - public_mean_1) / (len(ixs_1) + len(ixs_2) + 1)
-      public_mean_2 += (best_obs_2 - public_mean_2) / (len(ixs_1) + len(ixs_2) + 1)
-      ixs_1.append(best_ix_1)
-      # Other player naively incorporates new info
-      x2_1_mean += (best_obs_1 - x2_1_mean) / (t + 1 + n)
-      x2_2_mean += (best_obs_2 - x2_2_mean) / (t + 1 + n)
-      best_payoff_1 = best_payoff_1_t
-    else:
-      done = True
+    ixs_1.append(best_ix_1)
+    public_mean_1 += (best_obs_1 - public_mean_1) / (len(ixs_1) + len(ixs_2))
+    public_mean_2 += (best_obs_2 - public_mean_2) / (len(ixs_1) + len(ixs_2))
+    # Other player naively incorporates new info
+    x2_1_mean += (best_obs_1 - x2_1_mean) / (t + 1 + n)
+    x2_2_mean += (best_obs_2 - x2_2_mean) / (t + 1 + n)
 
     i += 1
-    if not done:
-      best_payoff_2_t, best_obs_2, best_obs_1, best_ix_2, best_a2, best_a1 = \
-        get_welfare_optimal_observation(x2_2, x2_1, public_mean_2, public_mean_1, len(ixs_1) + len(ixs_2), x2_2_mean,
-                                        x2_1_mean, ixs_2)
-      if best_payoff_2_t > best_payoff_2:
-        public_mean_1 += (best_obs_1 - public_mean_1) / (len(ixs_1) + len(ixs_2) + 1)
-        public_mean_2 += (best_obs_2 - public_mean_2) / (len(ixs_1) + len(ixs_2) + 1)
-        ixs_2.append(best_ix_2)
-        # Other player naively incorporates new info
-        x1_1_mean += (best_obs_1 - x1_1_mean) / (t + 1 + n)
-        x1_2_mean += (best_obs_2 - x1_2_mean) / (t + 1 + n)
-        t += 1
-      else:
-        done = True
-      i += 1
+    best_payoff_2_t, best_obs_2, best_obs_1, best_ix_2, best_a2, best_a1 = \
+      get_welfare_optimal_observation(x2_2, x2_1, public_mean_2, public_mean_1, len(ixs_1) + len(ixs_2), x2_2_mean,
+                                      x2_1_mean, ixs_2)
+    ixs_2.append(best_ix_2)
+    public_mean_1 += (best_obs_1 - public_mean_1) / (len(ixs_1) + len(ixs_2))
+    public_mean_2 += (best_obs_2 - public_mean_2) / (len(ixs_1) + len(ixs_2))
+    # Other player naively incorporates new info
+    x1_1_mean += (best_obs_1 - x1_1_mean) / (t + 1 + n)
+    x1_2_mean += (best_obs_2 - x1_2_mean) / (t + 1 + n)
+    t += 1
+    i += 1
 
   a1_barg, a2_barg, _ = get_welfare_optimal_profile(public_mean_1, public_mean_2)
   a1_ind, _, _ = get_welfare_optimal_eq(nash.Game(x1_1.mean(axis=0), x1_2.mean(axis=0)))
@@ -112,11 +108,12 @@ def alternating(n=5, sigma_u=1, sigma_x=20):
 
 
 if __name__ == "__main__":
+  # ToDo: larger action spaces? Estimation accuracy probably much more important here
   diff_1_lst = []
   diff_2_lst = []
   even_lst = []
-  for rep in range(10000):
-    diff_1, diff_2, even = alternating(sigma_x=1, n=2)
+  for rep in range(100000):
+    diff_1, diff_2, even = alternating(sigma_x=2, n=2)
     diff_1_lst.append(diff_1)
     diff_2_lst.append(diff_2)
     even_lst.append(even)
