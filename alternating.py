@@ -303,7 +303,7 @@ if __name__ == "__main__":
   cooperate_ts_ur_train_mean = []
   cooperate_ts_nr_train_mean = []
   cooperate_ts_test_mean = []
-  num_episodes = 100000
+  num_episodes = 1000
   for rep in range(n_rep):
     policy1_ur, policy2_ur, cooperate_ts_ur, _ = \
       train(policy_class=ContinuousPGLearner, n=100, horizon=100, update_block_size=300,

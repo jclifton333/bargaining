@@ -2,6 +2,7 @@ import numpy as np
 import nashpy as nash
 from nash_unif import get_welfare_optimal_eq, expected_payoffs
 import pdb
+import matplotlib.pyplot as plt
 
 
 def get_welfare_optimal_profile(p1, p2):
@@ -42,10 +43,30 @@ def get_welfare_optimal_observation(x_1, x_2, public_1, public_2, n_public, x_1_
   return best_payoff, best_obs_1, best_obs_2, best_ix, best_a1, best_a2
 
 
-def alternating(n=5, sigma_u=1, sigma_x=20):
+def random_nash(sigma_x=1, n=10):
+  u1_mean = np.array([[-10, 0], [-3, -1]])
+  u2_mean = np.array([[-10, -3], [0, -1]])
+  sigma_x_mat = np.array([[sigma_x, sigma_x], [0., 0.]])
+  u1_1 = np.random.normal(loc=u1_mean, scale=sigma_x_mat, size=(n, 2, 2))
+  u1_2 = np.random.normal(loc=u2_mean, scale=sigma_x_mat, size=(n, 2, 2))
+  u2_1 = np.random.normal(loc=u1_mean, scale=sigma_x_mat, size=(n, 2, 2))
+  u2_2 = np.random.normal(loc=u2_mean, scale=sigma_x_mat, size=(n, 2, 2))
+  crash_lst = []
+  for i in range(n):
+    u1_1_i, u1_2_i, u2_1_i, u2_2_i = u1_1[i], u1_2[i], u2_1[i], u2_2[i]
+    a1_1, _, _ = get_welfare_optimal_eq(nash.Game(u1_1_i, u1_2_i))
+    _, a2_2, _ = get_welfare_optimal_eq(nash.Game(u2_1_i, u2_2_i))
+    crash = (a1_1[0] == a2_2[0] == 1)
+    crash_lst.append(crash)
+  print(np.mean(crash_lst))
+
+
+def alternating(u1_mean=None, u2_mean=None, n=5, sigma_u=1, sigma_x=20):
   # Parameters
-  u1_mean = np.array([[-4, 0], [-5, -1]])
-  u2_mean = np.array([[-6, -5], [0, -1]])
+  if u1_mean is None:
+    u1_mean = np.array([[-10, 0], [-3, -1]])
+  if u2_mean is None:
+    u2_mean = np.array([[-10, -3], [0, -1]])
   sigma_x_mat = np.array([[sigma_x, sigma_x], [0., 0.]])
 
   # Generate true 2x2 payoffs
@@ -102,7 +123,8 @@ def alternating(n=5, sigma_u=1, sigma_x=20):
     t += 1
     i += 1
 
-  a1_barg, a2_barg, _ = get_welfare_optimal_profile(public_mean_1, public_mean_2)
+  # a1_barg, a2_barg, _ = get_welfare_optimal_profile(public_mean_1, public_mean_2)
+  a1_barg, a2_barg, _ = get_welfare_optimal_eq(nash.Game(public_mean_1, public_mean_2))
   a1_ind, _, _ = get_welfare_optimal_eq(nash.Game(x1_1.mean(axis=0), x1_2.mean(axis=0)))
   _, a2_ind, _ = get_welfare_optimal_eq(nash.Game(x2_1.mean(axis=0), x2_2.mean(axis=0)))
   # a1_ind, _, _ = get_welfare_optimal_profile(x1_1.mean(axis=0), x1_2.mean(axis=0))
@@ -114,14 +136,39 @@ def alternating(n=5, sigma_u=1, sigma_x=20):
 
 if __name__ == "__main__":
   # ToDo: larger action spaces? Estimation accuracy probably much more important here
-  diff_1_lst = []
-  diff_2_lst = []
-  even_lst = []
-  for rep in range(1000):
-    diff_1, diff_2, even = alternating(sigma_u=0, sigma_x=2, n=4)
-    diff_1_lst.append(diff_1)
-    diff_2_lst.append(diff_2)
-    even_lst.append(even)
-  print(np.mean(diff_1_lst), np.mean(diff_2_lst), np.mean(even_lst))
+  sigma_list = np.linspace(1, 10, 11)
+  improvement_lst = []
+  improvement_se_lst = []
+  n_rep = 1000
+  n_model_draw = 10
+  true_u1_mean = np.array([[-10, 0], [-3, -1]])
+  true_u2_mean = np.array([[-10, -3], [0, -1]])
+  u_scale = 2
+  for sigma in sigma_list:
+    improvement_draw_lst = []
+    for draw in range(n_model_draw):
+      u1_mean = true_u1_mean + np.random.normal(scale=u_scale, size=true_u1_mean.shape)
+      u2_mean = true_u2_mean + np.random.normal(scale=u_scale, size=true_u2_mean.shape)
+      diff_1_draw_lst = []
+      diff_2_draw_lst = []
+      even_lst = []
+      for rep in range(n_rep):
+        diff_1, diff_2, even = alternating(u1_mean=u1_mean, u2_mean=u2_mean, sigma_u=0, sigma_x=sigma, n=2)
+        diff_1_draw_lst.append(diff_1)
+        diff_2_draw_lst.append(diff_2)
+        even_lst.append(even)
+      diff_1_draw_mean = np.mean(diff_1_draw_lst)
+      diff_2_draw_mean = np.mean(diff_2_draw_lst)
+      improvement_draw = np.min((diff_1_draw_mean, diff_2_draw_mean))
+      improvement_draw_lst.append(improvement_draw)
+    improvement_lst.append(np.min(improvement_draw_lst))
+  # plt.errorbar(sigma_list, improvement_lst, yerr=improvement_se_lst, ecolor='r', capsize=2)
+  plt.plot(sigma_list, improvement_lst)
+  plt.xlabel('sigma')
+  plt.ylabel('mean improvement (std err)')
+  plt.show()
+
+    # print('mean sd 1: {}\nmean sd 2: {}'.format((np.mean(diff_1_lst), np.std(diff_1_lst) / np.sqrt(n_rep)),
+    #                                             (np.mean(diff_2_lst), np.std(diff_2_lst) / np.sqrt(n_rep))))
 
 
