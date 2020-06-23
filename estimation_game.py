@@ -3,6 +3,7 @@ import nashpy as nash
 from nash_unif import get_welfare_optimal_eq, expected_payoffs
 import pdb
 import matplotlib.pyplot as plt
+from scipy.stats import norm
 
 
 def get_welfare_optimal_profile(p1, p2):
@@ -41,6 +42,57 @@ def get_welfare_optimal_observation(x_1, x_2, public_1, public_2, n_public, x_1_
         best_a1, best_a2 = a1, a2
     ix += 1
   return best_payoff, best_obs_1, best_obs_2, best_ix, best_a1, best_a2
+
+def closed_form_bounds(sigma=1):
+  u1_mean = np.array([[-10, 0], [-3, -1]])
+  u2_mean = np.array([[-10, -3], [0, -1]])
+
+  # lower bound on P{ independent Nash -> (0, 0)}
+  # Prob Nash 
+  p_ind_1 = norm.cdf(u1_mean[0, 1] - u1_mean[1, 1], loc=0, scale=sigma) * \
+              norm.cdf(u2_mean[0, 1] - u2_mean[0, 0], loc=0, scale=sigma) * \
+              norm.cdf(u1_mean[1, 0] - u1_mean[0, 0], loc=0, scale=sigma) * \
+              norm.cdf(u2_mean[1, 0] - u2_mean[1, 1], loc=0, scale=sigma)
+  p_ind_nash = p_ind_1 - p_ind_1**2
+  # Prob welfare optimal
+  p_ind_wo_01 = 1.
+  p_ind_wo_10 = 1.
+  for i in range(2):
+    for j in range(2):
+      if not (i == 0 and j == 1):
+        welfare_diff_01_ij = u1_mean[i, j] + u2_mean[i, j] - u1_mean[0, 1] - \
+          u2_mean[0, 1]
+        p_ind_wo_01 *= 1 - norm.cdf(welfare_diff_01_ij, loc=0,
+                                    scale=np.sqrt(2)*sigma)
+      if not (i == 1 and j == 0):
+        welfare_diff_10_ij = u1_mean[i, j] + u2_mean[i, j] - u1_mean[1, 0] - \
+          u2_mean[1, 0]
+        p_ind_wo_10 *= 1 - norm.cdf(welfare_diff_10_ij, loc=0,
+                                    scale=np.sqrt(2)*sigma)
+  # ToDo: not tight enough! Doesn't account for dependence of welfare optimal,
+  # Nash; assumes welfare optimal, not welfare optimal among Nash equilibria
+  p_ind = 2*(p_ind_nash*p_ind_wo_10 - (p_ind_nash*p_ind_wo_10*p_ind_wo_01)**2)
+
+  # P{ averaged Nash -> (0, 0) }
+  p = norm.cdf(u1_mean[0, 0] - u1_mean[1, 0], loc=0, scale=sigma) * \
+      norm.cdf(u2_mean[0, 0] - u2_mean[0, 1], loc=0, scale=sigma)
+  p_avg = 4*p - 6*p**2 - 4*p**3 - p**4
+  return p_ind, p_avg
+
+
+def plot_closed_form_bounds():
+  sigma_range = np.linspace(0.5, 5, 10)
+  p_ind_lst = []
+  p_avg_lst = []
+  for sigma in sigma_range:
+    p_ind_, p_avg_ = closed_form_bounds(sigma=sigma)
+    p_ind_lst.append(p_ind_)
+    p_avg_lst.append(p_avg_)
+  plt.plot(sigma_range, p_ind_lst, label='ind')
+  plt.plot(sigma_range, p_avg_lst, label='avg')
+  plt.legend()
+  plt.show()
+  return
 
 
 def random_nash(sigma_x=1, n=10):
