@@ -71,7 +71,7 @@ def closed_form_bounds(sigma=1):
                                     scale=np.sqrt(2)*sigma)
   # ToDo: not tight enough! Doesn't account for dependence of welfare optimal,
   # Nash; assumes welfare optimal, not welfare optimal among Nash equilibria
-  p_ind = 2*(p_ind_nash*p_ind_wo_10 - (p_ind_nash*p_ind_wo_10*p_ind_wo_01)**2)
+  p_ind = 2*p_ind_nash*p_ind_wo_10*p_ind_wo_01 - (p_ind_nash*p_ind_wo_10*p_ind_wo_01)**2
 
   # P{ averaged Nash -> (0, 0) }
   p = norm.cdf(u1_mean[0, 0] - u1_mean[1, 0], loc=0, scale=sigma) * \
