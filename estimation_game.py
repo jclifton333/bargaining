@@ -73,7 +73,8 @@ def closed_form_bounds(sigma=1):
   # Nash; assumes welfare optimal, not welfare optimal among Nash equilibria
   p_ind = 2*p_ind_nash*p_ind_wo_10*p_ind_wo_01 - (p_ind_nash*p_ind_wo_10*p_ind_wo_01)**2
 
-  # P{ averaged Nash -> (0, 0) }
+  # upper bound on P{ averaged Nash -> (0, 0) }
+  # p{ one of the four possible averages is a NE
   p = norm.cdf(u1_mean[0, 0] - u1_mean[1, 0], loc=0, scale=sigma) * \
       norm.cdf(u2_mean[0, 0] - u2_mean[0, 1], loc=0, scale=sigma)
   p_avg = 4*p - 6*p**2 - 4*p**3 - p**4
