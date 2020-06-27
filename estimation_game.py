@@ -4,6 +4,7 @@ from nash_unif import get_welfare_optimal_eq, expected_payoffs
 import pdb
 import matplotlib.pyplot as plt
 from sklearn.linear_model import Ridge
+from sklearn.ensemble import RandomForestRegressor
 from scipy.stats import norm
 from scipy.special import expit
 
@@ -192,17 +193,10 @@ def alternating(a1, a2, u1_mean=None, u2_mean=None, bias_2_1=np.zeros((2, 2)), b
   return r1, r2
 
 
-def bandit(policy='adaptive') :
+def bandit(policy='adaptive'):
   n_rep = 1000
   # true_u1_mean = np.array([[-10, 0], [-3, -1]])
   # true_u2_mean = np.array([[-10, -3], [0, -1]])
-
-  if np.random.random() < 0.0:
-    true_u1_mean = np.array([[5, 3], [5, 3]])
-    true_u2_mean = np.array([[0, 3], [0, 3]])
-  else:
-    true_u1_mean = np.array([[0, 3], [0, 3]])
-    true_u2_mean = np.array([[5, 3], [5, 3]])
 
   a2 = 1  # Other player always plays collab
   X0 = np.zeros((0, 2))  # Will contain history of sigmas and biases
@@ -214,6 +208,13 @@ def bandit(policy='adaptive') :
   lm1 = Ridge()
 
   for rep in range(n_rep):
+    if np.random.random() < 0.5:
+      true_u1_mean = np.array([[5, 3], [5, 3]])
+      true_u2_mean = np.array([[0, 3], [0, 3]])
+    else:
+      true_u1_mean = np.array([[0, 3], [0, 3]])
+      true_u2_mean = np.array([[5, 3], [5, 3]])
+
     # Draw context and take action
     bias_2 = np.random.uniform(0, 1)
     sigma = np.random.uniform(1, 10)
@@ -222,14 +223,20 @@ def bandit(policy='adaptive') :
       a1 = np.random.choice(2)
     else:  # Thompson sampling
       if policy=='adaptive':
-        lm0.fit(X0, y0, sample_weight=np.random.exponential(size=len(y0)))
-        lm1.fit(X1, y1, sample_weight=np.random.exponential(size=len(y1)))
+        lm0.fit(X0, y0)
+        lm1.fit(X1, y1)
         q0 = lm0.predict([[bias_2, sigma]])
         q1 = lm1.predict([[bias_2, sigma]])
         if q1 > q0:
-          a1 = 1
+          if np.random.random() < 0.95:
+            a1 = 1
+          else:
+            a1 = 0
         else:
-          a1 = 0
+          if np.random.random() < 0.95:
+            a1 = 0
+          else:
+            a1 = 1
       elif policy=='ind':
         a1 = 0
       elif policy=='coop':
