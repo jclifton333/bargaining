@@ -114,7 +114,8 @@ def random_nash(sigma_x=1, n=10):
   print(np.mean(crash_lst))
 
 
-def alternating(u1_mean=None, u2_mean=None, n=5, sigma_u=1, sigma_x=20):
+def alternating(u1_mean=None, u2_mean=None, bias_2_1=np.zeros((2, 2)), bias_2_2=np.zeros((2,2)), n=2, sigma_u=1,
+                sigma_x=20):
   # Parameters
   if u1_mean is None:
     u1_mean = np.array([[-10, 0], [-3, -1]])
@@ -129,8 +130,8 @@ def alternating(u1_mean=None, u2_mean=None, n=5, sigma_u=1, sigma_x=20):
   # Generate obs
   x1_1 = np.random.normal(loc=u1, scale=sigma_x_mat, size=(n, 2, 2))
   x1_2 = np.random.normal(loc=u2, scale=sigma_x_mat, size=(n, 2, 2))
-  x2_1 = np.random.normal(loc=u1, scale=sigma_x_mat, size=(n, 2, 2))
-  x2_2 = np.random.normal(loc=u2, scale=sigma_x_mat, size=(n, 2, 2))
+  x2_1 = np.random.normal(loc=u1 + bias_2_1, scale=sigma_x_mat, size=(n, 2, 2))
+  x2_2 = np.random.normal(loc=u2 + bias_2_2, scale=sigma_x_mat, size=(n, 2, 2))
   x1_1_mean = x1_1.mean(axis=0)
   x1_2_mean = x1_2.mean(axis=0)
   x2_1_mean = x2_1.mean(axis=0)
@@ -187,18 +188,23 @@ def alternating(u1_mean=None, u2_mean=None, n=5, sigma_u=1, sigma_x=20):
   return u1_barg - u1_ind, u2_barg - u2_ind, (i % 2 == 0)
 
 
-def expected_improvement(sigma):
+def expected_improvement(sigma, bias_2):
   n_rep = 1000
-  n_model_draw = 10
-  true_u1_mean = np.array([[-10, 0], [-3, -1]])
-  true_u2_mean = np.array([[-10, -3], [0, -1]])
-  u_scale = 2
+  # true_u1_mean = np.array([[-10, 0], [-3, -1]])
+  # true_u2_mean = np.array([[-10, -3], [0, -1]])
+  true_u1_mean = np.array([[5, 3], [5, 3]])
+  true_u2_mean = np.array([[0, 3], [0, 3]])
+
+  bias_2_1 = np.array([[-5, 0], [-5, 0]])*bias_2
+  bias_2_2 = np.array([[5, 0], [5, 0]])*bias_2
 
   diff_1_lst = []
   diff_2_lst = []
   even_lst = []
   for rep in range(n_rep):
-    diff_1, diff_2, even = alternating(u1_mean=true_u1_mean, u2_mean=true_u2_mean, sigma_u=0, sigma_x=sigma, n=2)
+    diff_1, diff_2, even = alternating(u1_mean=true_u1_mean, u2_mean=true_u2_mean, bias_2_1=bias_2_1,
+                                       bias_2_2=bias_2_2, sigma_u=0,
+                                       sigma_x=sigma, n=2)
     diff_1_lst.append(diff_1)
     diff_2_lst.append(diff_2)
     even_lst.append(even)
@@ -210,16 +216,16 @@ def expected_improvement(sigma):
 
 
 if __name__ == "__main__":
-  # ToDo: larger action spaces? Estimation accuracy probably much more important here
   sigma_list = np.linspace(1, 20, 11)
+  bias_list = np.linspace(0, 1, 4)
   improvement_lst = []
   improvement_se_lst = []
-  for sigma in sigma_list:
-    diff_1_mean, _, diff_1_se, _ = expected_improvement(sigma)
+  for bias in bias_list:
+    diff_1_mean, _, diff_1_se, _ = expected_improvement(1., bias_2=bias)
     improvement_lst.append(diff_1_mean)
     improvement_se_lst.append(diff_1_se)
 
-  plt.errorbar(sigma_list, improvement_lst, yerr=improvement_se_lst, ecolor='r', capsize=2)
-  plt.xlabel('sigma')
+  plt.errorbar(bias_list, improvement_lst, yerr=improvement_se_lst, ecolor='r', capsize=2)
+  plt.xlabel('bias')
   plt.ylabel('mean improvement (std err)')
   plt.show()
