@@ -3,7 +3,9 @@ import nashpy as nash
 from nash_unif import get_welfare_optimal_eq, expected_payoffs
 import pdb
 import matplotlib.pyplot as plt
+from sklearn.linear_model import Ridge
 from scipy.stats import norm
+from scipy.special import expit
 
 
 def get_welfare_optimal_profile(p1, p2):
@@ -114,8 +116,11 @@ def random_nash(sigma_x=1, n=10):
   print(np.mean(crash_lst))
 
 
-def alternating(u1_mean=None, u2_mean=None, bias_2_1=np.zeros((2, 2)), bias_2_2=np.zeros((2,2)), n=2, sigma_u=1,
+def alternating(a1, a2, u1_mean=None, u2_mean=None, bias_2_1=np.zeros((2, 2)), bias_2_2=np.zeros((2,2)), n=2, sigma_u=1,
                 sigma_x=20):
+  """
+  ai: int in {0, 1}, 0=collab and 1=independent.
+  """
   # Parameters
   if u1_mean is None:
     u1_mean = np.array([[-10, 0], [-3, -1]])
@@ -153,83 +158,104 @@ def alternating(u1_mean=None, u2_mean=None, bias_2_1=np.zeros((2, 2)), bias_2_2=
   # ToDo: rule for rejecting
   done = False
   t = 0
-  while t < np.floor(n/2) and not done:
-    best_payoff_1_t, best_obs_1, best_obs_2, best_ix_1, best_a1, best_a2 = \
-      get_welfare_optimal_observation(x1_1, x1_2, public_mean_1, public_mean_2, len(ixs_1) + len(ixs_2), x1_1_mean,
-                                      x1_2_mean, ixs_1)
-    ixs_1.append(best_ix_1)
-    public_mean_1 += (best_obs_1 - public_mean_1) / (len(ixs_1) + len(ixs_2))
-    public_mean_2 += (best_obs_2 - public_mean_2) / (len(ixs_1) + len(ixs_2))
-    # Other player naively incorporates new info
-    x2_1_mean += (best_obs_1 - x2_1_mean) / (t + 1 + n)
-    x2_2_mean += (best_obs_2 - x2_2_mean) / (t + 1 + n)
+  if a1 == 1 and a2 == 1:
+    while t < np.floor(n/2) and not done:
+      best_payoff_1_t, best_obs_1, best_obs_2, best_ix_1, best_a1, best_a2 = \
+        get_welfare_optimal_observation(x1_1, x1_2, public_mean_1, public_mean_2, len(ixs_1) + len(ixs_2), x1_1_mean,
+                                        x1_2_mean, ixs_1)
+      ixs_1.append(best_ix_1)
+      public_mean_1 += (best_obs_1 - public_mean_1) / (len(ixs_1) + len(ixs_2))
+      public_mean_2 += (best_obs_2 - public_mean_2) / (len(ixs_1) + len(ixs_2))
+      # Other player naively incorporates new info
+      x2_1_mean += (best_obs_1 - x2_1_mean) / (t + 1 + n)
+      x2_2_mean += (best_obs_2 - x2_2_mean) / (t + 1 + n)
 
-    i += 1
-    best_payoff_2_t, best_obs_2, best_obs_1, best_ix_2, best_a2, best_a1 = \
-      get_welfare_optimal_observation(x2_2, x2_1, public_mean_2, public_mean_1, len(ixs_1) + len(ixs_2), x2_2_mean,
-                                      x2_1_mean, ixs_2)
-    ixs_2.append(best_ix_2)
-    public_mean_1 += (best_obs_1 - public_mean_1) / (len(ixs_1) + len(ixs_2))
-    public_mean_2 += (best_obs_2 - public_mean_2) / (len(ixs_1) + len(ixs_2))
-    # Other player naively incorporates new info
-    x1_1_mean += (best_obs_1 - x1_1_mean) / (t + 1 + n)
-    x1_2_mean += (best_obs_2 - x1_2_mean) / (t + 1 + n)
-    t += 1
-    i += 1
+      i += 1
+      best_payoff_2_t, best_obs_2, best_obs_1, best_ix_2, best_a2, best_a1 = \
+        get_welfare_optimal_observation(x2_2, x2_1, public_mean_2, public_mean_1, len(ixs_1) + len(ixs_2), x2_2_mean,
+                                        x2_1_mean, ixs_2)
+      ixs_2.append(best_ix_2)
+      public_mean_1 += (best_obs_1 - public_mean_1) / (len(ixs_1) + len(ixs_2))
+      public_mean_2 += (best_obs_2 - public_mean_2) / (len(ixs_1) + len(ixs_2))
+      # Other player naively incorporates new info
+      x1_1_mean += (best_obs_1 - x1_1_mean) / (t + 1 + n)
+      x1_2_mean += (best_obs_2 - x1_2_mean) / (t + 1 + n)
+      t += 1
+      i += 1
 
-  # a1_barg, a2_barg, _ = get_welfare_optimal_profile(public_mean_1, public_mean_2)
-  a1_barg, a2_barg, _ = get_welfare_optimal_eq(nash.Game(public_mean_1, public_mean_2))
-  a1_ind, _, _ = get_welfare_optimal_eq(nash.Game(x1_1.mean(axis=0), x1_2.mean(axis=0)))
-  _, a2_ind, _ = get_welfare_optimal_eq(nash.Game(x2_1.mean(axis=0), x2_2.mean(axis=0)))
-  # a1_ind, _, _ = get_welfare_optimal_profile(x1_1.mean(axis=0), x1_2.mean(axis=0))
-  # _, a2_ind, _ = get_welfare_optimal_profile(x2_1.mean(axis=0), x2_2.mean(axis=0))
-  u1_barg, u2_barg = expected_payoffs(u1, u2, a1_barg, a2_barg)
-  u1_ind, u2_ind = expected_payoffs(u1, u2, a1_ind, a2_ind)
-  return u1_barg - u1_ind, u2_barg - u2_ind, (i % 2 == 0)
+    d1, d2, _ = get_welfare_optimal_eq(nash.Game(public_mean_1, public_mean_2))
+  else:
+    d1, _, _ = get_welfare_optimal_eq(nash.Game(x1_1.mean(axis=0), x1_2.mean(axis=0)))
+    _, d2, _ = get_welfare_optimal_eq(nash.Game(x2_1.mean(axis=0), x2_2.mean(axis=0)))
+
+  r1, r2 = expected_payoffs(u1, u2, d1, d2)
+  return r1, r2
 
 
-def expected_improvement(sigma, bias_2):
-  n_rep = 10000
+def bandit(adaptive=True):
+  n_rep = 1000
   # true_u1_mean = np.array([[-10, 0], [-3, -1]])
   # true_u2_mean = np.array([[-10, -3], [0, -1]])
-  if np.random.uniform() < 0.7:
+
+  if np.random.random() < 0.7:
     true_u1_mean = np.array([[5, 3], [5, 3]])
     true_u2_mean = np.array([[0, 3], [0, 3]])
   else:
     true_u1_mean = np.array([[0, 3], [0, 3]])
     true_u2_mean = np.array([[5, 3], [5, 3]])
 
-  bias_2_1 = np.array([[-5, 0], [-5, 0]])*bias_2
-  bias_2_2 = np.array([[5, 0], [5, 0]])*bias_2
+  a2 = 1  # Other player always plays collab
+  X0 = np.zeros((0, 2))  # Will contain history of sigmas and biases
+  X1 = np.zeros((0, 2))
+  y = np.zeros(0)
+  y0 = np.zeros(0)  # Will contain history of rewards
+  y1 = np.zeros(0)
+  lm0 = Ridge()
+  lm1 = Ridge()
 
-  diff_1_lst = []
-  diff_2_lst = []
-  even_lst = []
   for rep in range(n_rep):
-    diff_1, diff_2, even = alternating(u1_mean=true_u1_mean, u2_mean=true_u2_mean, bias_2_1=bias_2_1,
-                                       bias_2_2=bias_2_2, sigma_u=0,
-                                       sigma_x=sigma, n=2)
-    diff_1_lst.append(diff_1)
-    diff_2_lst.append(diff_2)
-    even_lst.append(even)
-  diff_1_mean = np.mean(diff_1_lst)
-  diff_2_mean = np.mean(diff_2_lst)
-  diff_1_se = np.std(diff_1_lst) / np.sqrt(n_rep)
-  diff_2_se = np.std(diff_2_lst) / np.sqrt(n_rep)
-  return diff_1_mean, diff_2_mean, diff_1_se, diff_2_se
+    # Draw context and take action
+    bias_2 = np.random.uniform(0, 1)
+    sigma = np.random.uniform(1, 10)
+
+    if rep < 10:  # Choose at random in early stages
+      a1 = np.random.choice(2)
+    else:  # Thompson sampling
+      if adaptive:
+        lm0.fit(X0, y0, sample_weight=np.random.exponential(size=len(y0)))
+        lm1.fit(X1, y1, sample_weight=np.random.exponential(size=len(y1)))
+        q0 = lm0.predict([[bias_2, sigma]])
+        q1 = lm1.predict([[bias_2, sigma]])
+        if q1 > q0:
+          a1 = 1
+        else:
+          a1 = 0
+      else:
+        a1 = 0
+
+    # Observe reward
+    bias_2_1 = np.array([[-5, 0], [-5, 0]])*bias_2
+    bias_2_2 = np.array([[5, 0], [5, 0]])*bias_2
+
+    r1, _ = alternating(a1, a2, u1_mean=true_u1_mean, u2_mean=true_u2_mean, bias_2_1=bias_2_1,
+                                 bias_2_2=bias_2_2, sigma_u=0, sigma_x=sigma, n=2)
+
+    # Update history
+    if a1:
+      X1 = np.vstack((X1, [bias_2, sigma]))
+      y1 = np.hstack((y1, r1))
+    else:
+      X0 = np.vstack((X0, [bias_2, sigma]))
+      y0 = np.hstack((y0, r1))
+    y = np.hstack((y, r1))
+
+  return y
 
 
 if __name__ == "__main__":
-  sigma_list = np.linspace(1, 10, 4)
-  bias_list = np.linspace(0, 1, 4)
-  improvement_lst = []
-  improvement_se_lst = []
-  for sigma in sigma_list:
-    diff_1_mean, _, diff_1_se, _ = expected_improvement(sigma, 0.)
-    improvement_lst.append(diff_1_mean)
-    improvement_se_lst.append(diff_1_se)
-
-  plt.errorbar(sigma_list, improvement_lst, yerr=improvement_se_lst, ecolor='r', capsize=2)
-  plt.xlabel('sigma')
-  plt.ylabel('mean improvement (std err)')
+  r1_list_adaptive = bandit()
+  r1_list_ind = bandit(adaptive=False)
+  plt.plot(np.cumsum(r1_list_adaptive), label='adapt')
+  plt.plot(np.cumsum(r1_list_ind), label='ind')
+  plt.legend()
   plt.show()
