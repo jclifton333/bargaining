@@ -192,12 +192,12 @@ def alternating(a1, a2, u1_mean=None, u2_mean=None, bias_2_1=np.zeros((2, 2)), b
   return r1, r2
 
 
-def bandit(adaptive=True):
+def bandit(policy='adaptive') :
   n_rep = 1000
   # true_u1_mean = np.array([[-10, 0], [-3, -1]])
   # true_u2_mean = np.array([[-10, -3], [0, -1]])
 
-  if np.random.random() < 0.7:
+  if np.random.random() < 0.0:
     true_u1_mean = np.array([[5, 3], [5, 3]])
     true_u2_mean = np.array([[0, 3], [0, 3]])
   else:
@@ -221,7 +221,7 @@ def bandit(adaptive=True):
     if rep < 10:  # Choose at random in early stages
       a1 = np.random.choice(2)
     else:  # Thompson sampling
-      if adaptive:
+      if policy=='adaptive':
         lm0.fit(X0, y0, sample_weight=np.random.exponential(size=len(y0)))
         lm1.fit(X1, y1, sample_weight=np.random.exponential(size=len(y1)))
         q0 = lm0.predict([[bias_2, sigma]])
@@ -230,8 +230,10 @@ def bandit(adaptive=True):
           a1 = 1
         else:
           a1 = 0
-      else:
+      elif policy=='ind':
         a1 = 0
+      elif policy=='coop':
+        a1 = 1
 
     # Observe reward
     bias_2_1 = np.array([[-5, 0], [-5, 0]])*bias_2
@@ -254,8 +256,10 @@ def bandit(adaptive=True):
 
 if __name__ == "__main__":
   r1_list_adaptive = bandit()
-  r1_list_ind = bandit(adaptive=False)
+  r1_list_ind = bandit(policy='ind')
+  r1_list_coop = bandit(policy='coop')
   plt.plot(np.cumsum(r1_list_adaptive), label='adapt')
   plt.plot(np.cumsum(r1_list_ind), label='ind')
+  plt.plot(np.cumsum(r1_list_coop), label='coop', color='r')
   plt.legend()
   plt.show()
