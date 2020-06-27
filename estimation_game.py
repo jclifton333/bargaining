@@ -160,7 +160,7 @@ def alternating(a1, a2, u1_mean=None, u2_mean=None, bias_2_1=np.zeros((2, 2)), b
   done = False
   t = 0
   if a1 == 1 and a2 == 1:
-    while t < np.floor(n/2) and not done:
+    while t < 1 and not done:
       best_payoff_1_t, best_obs_1, best_obs_2, best_ix_1, best_a1, best_a2 = \
         get_welfare_optimal_observation(x1_1, x1_2, public_mean_1, public_mean_2, len(ixs_1) + len(ixs_2), x1_1_mean,
                                         x1_2_mean, ixs_1)
@@ -194,7 +194,7 @@ def alternating(a1, a2, u1_mean=None, u2_mean=None, bias_2_1=np.zeros((2, 2)), b
 
 
 def bandit(policy='adaptive'):
-  n_rep = 1000
+  n_rep = 100
   # true_u1_mean = np.array([[-10, 0], [-3, -1]])
   # true_u2_mean = np.array([[-10, -3], [0, -1]])
 
@@ -247,7 +247,7 @@ def bandit(policy='adaptive'):
     bias_2_2 = np.array([[5, 0], [5, 0]])*bias_2
 
     r1, _ = alternating(a1, a2, u1_mean=true_u1_mean, u2_mean=true_u2_mean, bias_2_1=bias_2_1,
-                                 bias_2_2=bias_2_2, sigma_u=0, sigma_x=sigma, n=2)
+                        bias_2_2=bias_2_2, sigma_u=0, sigma_x=sigma, n=10)
 
     # Update history
     if a1:
@@ -262,11 +262,22 @@ def bandit(policy='adaptive'):
 
 
 if __name__ == "__main__":
-  r1_list_adaptive = bandit()
-  r1_list_ind = bandit(policy='ind')
-  r1_list_coop = bandit(policy='coop')
-  plt.plot(np.cumsum(r1_list_adaptive), label='adapt')
-  plt.plot(np.cumsum(r1_list_ind), label='ind')
-  plt.plot(np.cumsum(r1_list_coop), label='coop', color='r')
-  plt.legend()
+  replicates = 2
+  r1_list_adaptive = []
+  r1_list_ind = []
+  r1_list_coop = []
+  for _ in range(replicates):
+    print('foo')
+    r1_list_adaptive_rep = bandit()
+    r1_list_adaptive.append(r1_list_adaptive_rep)
+    r1_list_ind_rep = bandit(policy='ind')
+    r1_list_ind.append(r1_list_ind_rep)
+    r1_list_coop_rep = bandit(policy='coop')
+    r1_list_coop.append(r1_list_coop_rep)
+
+  data = {'adapt': np.cumsum(r1_list_adaptive, axis=1),
+          'ind': np.cumsum(r1_list_ind, axis=1),
+          'coop': np.cumsum(r1_list_coop, axis=1),
+          'timepoint': np.arange(len(r1_list_coop[0]))}
+  plt.plot(data['adapt'].mean, label='adapt')
   plt.show()
