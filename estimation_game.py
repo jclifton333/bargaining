@@ -189,11 +189,15 @@ def alternating(u1_mean=None, u2_mean=None, bias_2_1=np.zeros((2, 2)), bias_2_2=
 
 
 def expected_improvement(sigma, bias_2):
-  n_rep = 1000
+  n_rep = 10000
   # true_u1_mean = np.array([[-10, 0], [-3, -1]])
   # true_u2_mean = np.array([[-10, -3], [0, -1]])
-  true_u1_mean = np.array([[5, 3], [5, 3]])
-  true_u2_mean = np.array([[0, 3], [0, 3]])
+  if np.random.uniform() < 0.7:
+    true_u1_mean = np.array([[5, 3], [5, 3]])
+    true_u2_mean = np.array([[0, 3], [0, 3]])
+  else:
+    true_u1_mean = np.array([[0, 3], [0, 3]])
+    true_u2_mean = np.array([[5, 3], [5, 3]])
 
   bias_2_1 = np.array([[-5, 0], [-5, 0]])*bias_2
   bias_2_2 = np.array([[5, 0], [5, 0]])*bias_2
@@ -216,16 +220,16 @@ def expected_improvement(sigma, bias_2):
 
 
 if __name__ == "__main__":
-  sigma_list = np.linspace(1, 20, 11)
+  sigma_list = np.linspace(1, 10, 4)
   bias_list = np.linspace(0, 1, 4)
   improvement_lst = []
   improvement_se_lst = []
-  for bias in bias_list:
-    diff_1_mean, _, diff_1_se, _ = expected_improvement(1., bias_2=bias)
+  for sigma in sigma_list:
+    diff_1_mean, _, diff_1_se, _ = expected_improvement(sigma, 0.)
     improvement_lst.append(diff_1_mean)
     improvement_se_lst.append(diff_1_se)
 
-  plt.errorbar(bias_list, improvement_lst, yerr=improvement_se_lst, ecolor='r', capsize=2)
-  plt.xlabel('bias')
+  plt.errorbar(sigma_list, improvement_lst, yerr=improvement_se_lst, ecolor='r', capsize=2)
+  plt.xlabel('sigma')
   plt.ylabel('mean improvement (std err)')
   plt.show()
