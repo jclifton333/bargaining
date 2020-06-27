@@ -73,7 +73,8 @@ def closed_form_bounds(sigma=1):
   # Nash; assumes welfare optimal, not welfare optimal among Nash equilibria
   p_ind = 2*p_ind_nash*p_ind_wo_10*p_ind_wo_01 - (p_ind_nash*p_ind_wo_10*p_ind_wo_01)**2
 
-  # P{ averaged Nash -> (0, 0) }
+  # upper bound on P{ averaged Nash -> (0, 0) }
+  # p{ one of the four possible averages is a NE
   p = norm.cdf(u1_mean[0, 0] - u1_mean[1, 0], loc=0, scale=sigma) * \
       norm.cdf(u2_mean[0, 0] - u2_mean[0, 1], loc=0, scale=sigma)
   p_avg = 4*p - 6*p**2 - 4*p**3 - p**4
@@ -186,41 +187,39 @@ def alternating(u1_mean=None, u2_mean=None, n=5, sigma_u=1, sigma_x=20):
   return u1_barg - u1_ind, u2_barg - u2_ind, (i % 2 == 0)
 
 
-if __name__ == "__main__":
-  # ToDo: larger action spaces? Estimation accuracy probably much more important here
-  sigma_list = np.linspace(1, 10, 11)
-  improvement_lst = []
-  improvement_se_lst = []
+def expected_improvement(sigma):
   n_rep = 1000
   n_model_draw = 10
   true_u1_mean = np.array([[-10, 0], [-3, -1]])
   true_u2_mean = np.array([[-10, -3], [0, -1]])
   u_scale = 2
+
+  diff_1_lst = []
+  diff_2_lst = []
+  even_lst = []
+  for rep in range(n_rep):
+    diff_1, diff_2, even = alternating(u1_mean=true_u1_mean, u2_mean=true_u2_mean, sigma_u=0, sigma_x=sigma, n=2)
+    diff_1_lst.append(diff_1)
+    diff_2_lst.append(diff_2)
+    even_lst.append(even)
+  diff_1_mean = np.mean(diff_1_lst)
+  diff_2_mean = np.mean(diff_2_lst)
+  diff_1_se = np.std(diff_1_lst) / np.sqrt(n_rep)
+  diff_2_se = np.std(diff_2_lst) / np.sqrt(n_rep)
+  return diff_1_mean, diff_2_mean, diff_1_se, diff_2_se
+
+
+if __name__ == "__main__":
+  # ToDo: larger action spaces? Estimation accuracy probably much more important here
+  sigma_list = np.linspace(1, 20, 11)
+  improvement_lst = []
+  improvement_se_lst = []
   for sigma in sigma_list:
-    improvement_draw_lst = []
-    for draw in range(n_model_draw):
-      u1_mean = true_u1_mean + np.random.normal(scale=u_scale, size=true_u1_mean.shape)
-      u2_mean = true_u2_mean + np.random.normal(scale=u_scale, size=true_u2_mean.shape)
-      diff_1_draw_lst = []
-      diff_2_draw_lst = []
-      even_lst = []
-      for rep in range(n_rep):
-        diff_1, diff_2, even = alternating(u1_mean=u1_mean, u2_mean=u2_mean, sigma_u=0, sigma_x=sigma, n=2)
-        diff_1_draw_lst.append(diff_1)
-        diff_2_draw_lst.append(diff_2)
-        even_lst.append(even)
-      diff_1_draw_mean = np.mean(diff_1_draw_lst)
-      diff_2_draw_mean = np.mean(diff_2_draw_lst)
-      improvement_draw = np.min((diff_1_draw_mean, diff_2_draw_mean))
-      improvement_draw_lst.append(improvement_draw)
-    improvement_lst.append(np.min(improvement_draw_lst))
-  # plt.errorbar(sigma_list, improvement_lst, yerr=improvement_se_lst, ecolor='r', capsize=2)
-  plt.plot(sigma_list, improvement_lst)
+    diff_1_mean, _, diff_1_se, _ = expected_improvement(sigma)
+    improvement_lst.append(diff_1_mean)
+    improvement_se_lst.append(diff_1_se)
+
+  plt.errorbar(sigma_list, improvement_lst, yerr=improvement_se_lst, ecolor='r', capsize=2)
   plt.xlabel('sigma')
   plt.ylabel('mean improvement (std err)')
   plt.show()
-
-    # print('mean sd 1: {}\nmean sd 2: {}'.format((np.mean(diff_1_lst), np.std(diff_1_lst) / np.sqrt(n_rep)),
-    #                                             (np.mean(diff_2_lst), np.std(diff_2_lst) / np.sqrt(n_rep))))
-
-
