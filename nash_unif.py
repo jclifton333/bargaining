@@ -84,9 +84,9 @@ def compare_perturbed_games(p1, p2, loc=0., scale=0.3, bias_direction=1, player_
   # Assuming only first row observed with noise
   scale_mat = np.array([[scale, scale], [0, 0]])
   p1_1 = p1 + np.random.normal(size=p1.shape, loc=loc, scale=scale_mat)
-  p2_1 = p2 + np.random.normal(size=p2.shape, loc=loc, scale=scale_mat.T)
+  p2_1 = p2 + np.random.normal(size=p2.shape, loc=loc, scale=scale_mat)
   p1_2 = p1 + np.random.normal(size=p1.shape, loc=loc*bias_direction, scale=scale_mat)
-  p2_2 = p2 + np.random.normal(size=p2.shape, loc=loc*bias_direction, scale=scale_mat.T)
+  p2_2 = p2 + np.random.normal(size=p2.shape, loc=loc*bias_direction, scale=scale_mat)
   # p1_1 = p1 + np.random.standard_t(size=p1.shape, df=2.1)
   # p2_1 = p2 + np.random.standard_t(size=p2.shape, df=2.1)
   # p1_2 = p1 + np.random.standard_t(size=p1.shape, df=2.1)
@@ -135,7 +135,7 @@ if __name__ == "__main__":
   GEN_SCALE = 1
   NOISE_SCALE = np.array([[20., 20.], [0, 0]])
   NOISE_BIAS = 0.0
-  N_OBS = 40
+  N_OBS = 20
   BIAS_FLIP_DIRECTION = 1  # Player 1 bias=NOISE_BIAS; Player 2 bias=BIAS_FLIP_DIRECTION*NOISE_BIAS
 
   num_games = 1
@@ -146,16 +146,16 @@ if __name__ == "__main__":
     avgs_i = []
     inds_i = []
     errors_i = []
-    p1 = np.array([[-4, 0], [-5, -1]])
-    p2 = np.array([[-6, -5], [0, -1]]).T
+    p1 = np.array([[-10, 0], [-3, -1]])
+    p2 = np.array([[-10, -3], [0, -1]])
     for j in range(num_reps):
       # Obs for player 1
       p1_1_list = [np.random.normal(loc=p1, scale=NOISE_SCALE) for obs in range(N_OBS)]
-      p2_1_list = [np.random.normal(loc=p2, scale=NOISE_SCALE.T) for obs in range(N_OBS)]
+      p2_1_list = [np.random.normal(loc=p2, scale=NOISE_SCALE) for obs in range(N_OBS)]
       p_list_1 = list(zip(p1_1_list, p2_1_list))
       # Obs for player 2
       p1_2_list = [np.random.normal(loc=p1, scale=NOISE_SCALE) for obs in range(N_OBS)]
-      p2_2_list = [np.random.normal(loc=p2, scale=NOISE_SCALE.T) for obs in range(N_OBS)]
+      p2_2_list = [np.random.normal(loc=p2, scale=NOISE_SCALE) for obs in range(N_OBS)]
       p_list_2 = list(zip(p1_2_list, p2_2_list))
 
       # ToDo: redundant, can be optimized
@@ -176,7 +176,7 @@ if __name__ == "__main__":
       true_diff = v1_avg - v1_ind
 
       # Get estimated difference
-      a1_adapt, a2_adapt, est_diff_1, est_diff_2 = adaptive_strategy(p_list_1, p_list_2)
+      a1_adapt, a2_adapt, est_diff_1, est_diff_2 = adaptive_strategy(p_list_1, p_list_2, n_split=100, n_rep=10)
       v1_adapt, v2_adapt = expected_payoffs(p1, p2, a1_adapt, a2_adapt)
 
       print('adapt: {} avg: {} ind: {}'.format(v1_adapt, v1_avg, v1_ind))
@@ -185,4 +185,11 @@ if __name__ == "__main__":
       adapts_i.append(v1_adapt)
       avgs_i.append(v1_avg)
       inds_i.append(v1_ind)
-    print('MEAN adapt: {} avg: {} ind: {}'.format(np.mean(adapts_i), np.mean(avgs_i), np.mean(inds_i)))
+    mean_adapts = np.mean(adapts_i)
+    se_adapts = np.std(adapts_i) / np.sqrt(len(adapts_i))
+    mean_avgs = np.mean(avgs_i)
+    se_avgs = np.std(avgs_i) / np.sqrt(len(avgs_i))
+    mean_inds = np.mean(inds_i)
+    se_inds = np.std(inds_i) / np.sqrt(len(inds_i))
+    print('MEAN adapt: {}\navg: {}\nind: {}'.format((mean_adapts, se_adapts), (mean_avgs, se_avgs),
+                                                    (mean_inds, se_inds)))

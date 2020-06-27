@@ -38,6 +38,7 @@ class BasicPGLearner(nn.Module):
     self.episode_rewards = []
     self.probs = []
     self.rewards = []
+    self.data_length = None
 
   def reset(self):
     self.probs = []
@@ -48,7 +49,8 @@ class BasicPGLearner(nn.Module):
     action = message_and_action[-1]
     n_options = len(payoffs)
     if action == 1:  # Accept
-      welfare_optimal_ix = np.argmax(message_and_action[:n_options] + message_and_action[n_options:(2*n_options)])
+      welfare_optimal_ix = np.argmax(message_and_action[self.data_length:(self.data_length+n_options)] +
+                                     message_and_action[(self.data_length+n_options):(self.data_length+2*n_options)])
       reward = payoffs[int(welfare_optimal_ix)]
       done = True
     else:
@@ -187,7 +189,7 @@ def train(welfare1='util', welfare2='util', policy_class=ContinuousPGLearner, po
           update_block_size=100, num_episodes=100000):
   # Train PGLearner against PGLearner
   num_actions = 3
-  history_length = num_actions*2
+  history_length = num_actions
 
   if policies is None:
     # input_size = n*num_actions*3 + 1
@@ -225,7 +227,8 @@ def train(welfare1='util', welfare2='util', policy_class=ContinuousPGLearner, po
         history.append(payoff_2)
         welfare_means[j] += (payoff_1 + payoff_2)
     welfare_means /= n
-    history = T.from_numpy(np.concatenate((expected_payoffs_1, expected_payoffs_2))).double()
+    # history = T.from_numpy(np.concatenate((expected_payoffs_1, expected_payoffs_2))).double()
+    history = T.from_numpy(expected_payoffs_1 + expected_payoffs_2).double()
     message1 = T.ones(num_actions*2)
     message2 = T.ones(num_actions*2)
     for t in range(horizon):
@@ -266,17 +269,17 @@ def train(welfare1='util', welfare2='util', policy_class=ContinuousPGLearner, po
     cooperate_list.append(cooperate)
     efficient_list.append(efficient)
     cooperate_pct = np.mean(cooperate_list[-10:])
-    efficient_pct = np.mean(efficient_list[-10:])
+    efficient_pct = np.mean(efficient_list[-100:])
     cooperate_mean_list.append(cooperate_pct)
     efficient_mean_list.append(efficient_pct)
     t_list.append(t)
-    print(t, cooperate_pct)
+    print(t, efficient_pct)
 
     # Take turns updating policies
     if policies is None:
       if (episode // update_block_size) % 2 == 0:
         loss1 += compute_loss(policy1.probs, policy1.rewards)
-        if episode % 10 == 0:
+        if episode % 1 == 0:
           optimizer1.zero_grad()
           if loss1 > 0:
             loss1.backward()
@@ -284,7 +287,7 @@ def train(welfare1='util', welfare2='util', policy_class=ContinuousPGLearner, po
           loss1 = 0
       else:
         loss2 += compute_loss(policy2.probs, policy2.rewards)
-        if episode % 10 == 0:
+        if episode % 1 == 0:
           optimizer2.zero_grad()
           if loss2 > 0:
             loss2.backward()
@@ -297,12 +300,19 @@ def train(welfare1='util', welfare2='util', policy_class=ContinuousPGLearner, po
 
 
 if __name__ == "__main__":
+  # ToDo: Instead, use discrete action space which selects different welfare functions (e.g. util, Nash)
+  # Todo:  (but possibly with distorted observations, to model incentives to misrepresent?)
+
+  # ToDo: just do RL on the much simpler env in estimation_game.py; embrace k-level ToM
+
+  # ToDo: focus on the argument from enlarged action space / subjective pareto improvement, not a new solution concept
+
   np.random.seed(1)
   n_rep = 1
   cooperate_ts_ur_train_mean = []
   cooperate_ts_nr_train_mean = []
   cooperate_ts_test_mean = []
-  num_episodes = 100000
+  num_episodes = 20000
   for rep in range(n_rep):
     policy1_ur, policy2_ur, cooperate_ts_ur, _ = \
       train(policy_class=ContinuousPGLearner, n=10, horizon=3, update_block_size=20,
