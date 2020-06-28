@@ -39,7 +39,8 @@ def get_welfare_optimal_profile(p1, p2):
   return best_a1, best_a2, best_welfare
 
 
-def get_welfare_optimal_observation(x_1, x_2, public_1, public_2, n_public, x_1_true, x_2_true, used_ixs):
+def get_welfare_optimal_observation(x_1, x_2, public_1, public_2, n_public, x_1_true, x_2_true, used_ixs,
+                                    sigma, sigma_tol=2, too_far_penalty=100):
   best_ix = None
   best_payoff = -float('inf')
   ix = 0
@@ -49,9 +50,11 @@ def get_welfare_optimal_observation(x_1, x_2, public_1, public_2, n_public, x_1_
     new_public_1 = public_1 + (obs_1 - public_1) / (n_public + 1)
     new_public_2 = public_2 + (obs_2 - public_2) / (n_public + 1)
     if ix not in used_ixs:
+      close_enough = check_matrix_distances(public_1, public_2, obs_1, obs_2, sigma, sigma_tol)
       # a1, a2, _ = get_welfare_optimal_eq(nash.Game(new_public_1, new_public_2))
       a1, a2, _ = get_welfare_optimal_profile(new_public_1, new_public_2)
       u1_obs, _ = expected_payoffs(x_1_true, x_2_true, a1, a2)
+      u1_obs -= (1 - close_enough)*too_far_penalty
       if u1_obs > best_payoff:
         best_payoff = u1_obs
         best_ix = ix
@@ -132,7 +135,7 @@ def random_nash(sigma_x=1, n=10):
 
 
 def alternating(a1, a2, u1_mean=None, u2_mean=None, bias_2_1=np.zeros((2, 2)), bias_2_2=np.zeros((2,2)), n=2, sigma_u=1,
-                sigma_x=20):
+                sigma_x=20, sigma_tol=0.1):
   """
   ai: int in {0, 1}, 0=collab and 1=independent.
   """
@@ -175,15 +178,17 @@ def alternating(a1, a2, u1_mean=None, u2_mean=None, bias_2_1=np.zeros((2, 2)), b
   t = 0
   if a1 == 1 and a2 == 1:
     while t < 1 and not done:
-      best_payoff_1_t, best_obs_1, best_obs_2, best_ix_1, best_a1, best_a2 = \
+      # ToDo: passing known sigma_x to check_matrix_distances in get_welfare_optimal_observation, whereas in practice
+      # ToDo: this is unknown
+      best_payoff_1_t, best_obs_11, best_obs_12, best_ix_1, best_a1, best_a2 = \
         get_welfare_optimal_observation(x1_1, x1_2, public_mean_1, public_mean_2, len(ixs_1) + len(ixs_2), x1_1_mean,
-                                        x1_2_mean, ixs_1)
+                                        x1_2_mean, ixs_1, sigma_x / np.sqrt(n), sigma_tol=sigma_tol)
       ixs_1.append(best_ix_1)
-      public_mean_1 += (best_obs_1 - public_mean_1) / (len(ixs_1) + len(ixs_2))
-      public_mean_2 += (best_obs_2 - public_mean_2) / (len(ixs_1) + len(ixs_2))
-      # Other player naively incorporates new info
-      x2_1_mean += (best_obs_1 - x2_1_mean) / (t + 1 + n)
-      x2_2_mean += (best_obs_2 - x2_2_mean) / (t + 1 + n)
+      public_mean_1 += (best_obs_11 - public_mean_1) / (len(ixs_1) + len(ixs_2))
+      public_mean_2 += (best_obs_12 - public_mean_2) / (len(ixs_1) + len(ixs_2))
+      # # Other player naively incorporates new info
+      # x2_1_mean += (best_obs_1 - x2_1_mean) / (t + 1 + n)
+      # x2_2_mean += (best_obs_2 - x2_2_mean) / (t + 1 + n)
 
       i += 1
       x2_2 = [np.array([[-10, -3], [1., -1]])]
@@ -191,28 +196,34 @@ def alternating(a1, a2, u1_mean=None, u2_mean=None, bias_2_1=np.zeros((2, 2)), b
       # x2_1 = [x2_1_mean + np.random.uniform(low=-10, high=10, size=((2, 2))) for _ in range(n)]
       x2_1 = [np.array([[-10, -0.5], [-3, -1]])]
       x2_1.append(x2_1_mean)
-      best_payoff_2_t, best_obs_2, best_obs_1, best_ix_2, best_a2, best_a1 = \
+      best_payoff_2_t, best_obs_22, best_obs_21, best_ix_2, best_a2, best_a1 = \
         get_welfare_optimal_observation(x2_2, x2_1, public_mean_2, public_mean_1, len(ixs_1) + len(ixs_2), x2_2_mean,
-                                        x2_1_mean, ixs_2)
+                                        x2_1_mean, ixs_2, sigma_x / np.sqrt(n), sigma_tol=sigma_tol)
       ixs_2.append(best_ix_2)
-      public_mean_1 += (best_obs_1 - public_mean_1) / (len(ixs_1) + len(ixs_2))
-      public_mean_2 += (best_obs_2 - public_mean_2) / (len(ixs_1) + len(ixs_2))
-      # Other player naively incorporates new info
-      x1_1_mean += (best_obs_1 - x1_1_mean) / (t + 1 + n)
-      x1_2_mean += (best_obs_2 - x1_2_mean) / (t + 1 + n)
+      public_mean_1 += (best_obs_21 - public_mean_1) / (len(ixs_1) + len(ixs_2))
+      public_mean_2 += (best_obs_22 - public_mean_2) / (len(ixs_1) + len(ixs_2))
+      # # Other player naively incorporates new info
+      # x1_1_mean += (best_obs_1 - x1_1_mean) / (t + 1 + n)
+      # x1_2_mean += (best_obs_2 - x1_2_mean) / (t + 1 + n)
       t += 1
       i += 1
 
-    d1, d2, _ = get_welfare_optimal_eq(nash.Game(public_mean_1, public_mean_2))
+    close_enough = check_matrix_distances(best_obs_11, best_obs_12, best_obs_21, best_obs_22, sigma_x / np.sqrt(n),
+                                          sigma_tol=sigma_tol)
+    if close_enough:
+      d1, d2, _ = get_welfare_optimal_eq(nash.Game(public_mean_1, public_mean_2))
+    else:
+      d1, _, _ = get_welfare_optimal_eq(nash.Game(x1_1_mean, x1_2_mean))
+      _, d2, _ = get_welfare_optimal_eq(nash.Game(x2_1_mean, x2_2_mean))
   else:
-    d1, _, _ = get_welfare_optimal_eq(nash.Game(x1_1.mean(axis=0), x1_2.mean(axis=0)))
-    _, d2, _ = get_welfare_optimal_eq(nash.Game(x2_1.mean(axis=0), x2_2.mean(axis=0)))
+    d1, _, _ = get_welfare_optimal_eq(nash.Game(x1_1_mean, x1_2_mean))
+    _, d2, _ = get_welfare_optimal_eq(nash.Game(x2_1_mean, x2_2_mean))
 
   r1, r2 = expected_payoffs(u1, u2, d1, d2)
   return r1, r2
 
 
-def bandit(policy='adaptive', time_horizon=50, n=5):
+def bandit(policy='adaptive', time_horizon=50, n=5, sigma_tol=1):
   a2 = 1  # Other player always plays collab
   X0 = np.zeros((0, 2))  # Will contain history of sigmas and biases
   X1 = np.zeros((0, 2))
@@ -245,6 +256,8 @@ def bandit(policy='adaptive', time_horizon=50, n=5):
         lm1.fit(X1, y1)
         q0 = lm0.predict([[bias_2, sigma]])
         q1 = lm1.predict([[bias_2, sigma]])
+        # q0 = y0.mean()
+        # q1 = y1.mean()
         if q1 > q0:
           if np.random.random() < 0.95:
             a1 = 1
@@ -265,7 +278,7 @@ def bandit(policy='adaptive', time_horizon=50, n=5):
     bias_2_2 = np.array([[5, 0], [5, 0]])*bias_2
 
     r1, _ = alternating(a1, a2, u1_mean=true_u1_mean, u2_mean=true_u2_mean, bias_2_1=bias_2_1,
-                        bias_2_2=bias_2_2, sigma_u=0, sigma_x=sigma, n=n)
+                        bias_2_2=bias_2_2, sigma_u=0, sigma_x=sigma, n=n, sigma_tol=sigma_tol)
 
     # Update history
     if a1:
@@ -279,16 +292,16 @@ def bandit(policy='adaptive', time_horizon=50, n=5):
   return y
 
 
-def compare_policies(replicates=10, time_horizon=50, n_private_obs=5):
+def compare_policies(replicates=10, time_horizon=50, n_private_obs=5, sigma_tol=1):
   r1_list_adaptive = []
   r1_list_ind = []
   r1_list_coop = []
   for _ in range(replicates):
-    r1_list_adaptive_rep = bandit(n=n_private_obs, time_horizon=time_horizon)
+    r1_list_adaptive_rep = bandit(n=n_private_obs, time_horizon=time_horizon, sigma_tol=sigma_tol)
     r1_list_adaptive.append(r1_list_adaptive_rep)
-    r1_list_ind_rep = bandit(policy='ind', n=n_private_obs, time_horizon=time_horizon)
+    r1_list_ind_rep = bandit(policy='ind', n=n_private_obs, time_horizon=time_horizon, sigma_tol=sigma_tol)
     r1_list_ind.append(r1_list_ind_rep)
-    r1_list_coop_rep = bandit(policy='coop', n=n_private_obs, time_horizon=time_horizon)
+    r1_list_coop_rep = bandit(policy='coop', n=n_private_obs, time_horizon=time_horizon, sigma_tol=sigma_tol)
     r1_list_coop.append(r1_list_coop_rep)
 
   data = {'adapt': np.cumsum(r1_list_adaptive, axis=1),
@@ -309,4 +322,4 @@ def compare_policies(replicates=10, time_horizon=50, n_private_obs=5):
 
 
 if __name__ == "__main__":
-  compare_policies(n_private_obs=2, time_horizon=200)
+  compare_policies(n_private_obs=2, time_horizon=200, sigma_tol=0.1)
