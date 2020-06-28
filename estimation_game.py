@@ -10,6 +10,19 @@ from scipy.special import expit
 import seaborn as sns
 
 
+def check_matrix_distances(m11, m12, m21, m22, sigma, sigma_tol):
+  """
+  Check that two pairs of matrices are sufficiently close, where they are
+  assumed to be means of iid normal with diag(sigma) covariance.
+  """
+  dist_1 = np.mean((m11 - m21)**2)
+  dist_2 = np.mean((m12 - m22)**2)
+  if (dist_1 + dist_2) / 2 < sigma_tol * sigma:
+    return True
+  else:
+    return False
+
+
 def get_welfare_optimal_profile(p1, p2):
   best_welfare = -float("inf")
   best_a1, best_a2 = None, None
@@ -173,9 +186,10 @@ def alternating(a1, a2, u1_mean=None, u2_mean=None, bias_2_1=np.zeros((2, 2)), b
       x2_2_mean += (best_obs_2 - x2_2_mean) / (t + 1 + n)
 
       i += 1
-      x2_2 = [x2_2_mean + np.random.uniform(low=-10, high=10, size=((2, 2))) for _ in range(n)]
+      x2_2 = [np.array([[-10, -3], [1., -1]])]
       x2_2.append(x2_2_mean)
-      x2_1 = [x2_1_mean + np.random.uniform(low=-10, high=10, size=((2, 2))) for _ in range(n)]
+      # x2_1 = [x2_1_mean + np.random.uniform(low=-10, high=10, size=((2, 2))) for _ in range(n)]
+      x2_1 = [np.array([[-10, -0.5], [-3, -1]])]
       x2_1.append(x2_1_mean)
       best_payoff_2_t, best_obs_2, best_obs_1, best_ix_2, best_a2, best_a1 = \
         get_welfare_optimal_observation(x2_2, x2_1, public_mean_2, public_mean_1, len(ixs_1) + len(ixs_2), x2_2_mean,
@@ -198,9 +212,7 @@ def alternating(a1, a2, u1_mean=None, u2_mean=None, bias_2_1=np.zeros((2, 2)), b
   return r1, r2
 
 
-def bandit(policy='adaptive', n=5):
-  n_rep = 100
-  
+def bandit(policy='adaptive', time_horizon=50, n=5):
   a2 = 1  # Other player always plays collab
   X0 = np.zeros((0, 2))  # Will contain history of sigmas and biases
   X1 = np.zeros((0, 2))
@@ -210,22 +222,22 @@ def bandit(policy='adaptive', n=5):
   lm0 = Ridge()
   lm1 = Ridge()
 
-  for rep in range(n_rep):
-    if np.random.random() < 1.0:
-      true_u1_mean = np.array([[5, 3], [5, 3]])
-      true_u2_mean = np.array([[0, 3], [0, 3]])
+  for t in range(time_horizon):
+    # if np.random.random() < 1.0:
+    #   true_u1_mean = np.array([[5, 2], [5, 2]])
+    #   true_u2_mean = np.array([[0, 2], [0, 2]])
     # else:
     #   true_u1_mean = np.array([[0, 3], [0, 3]])
     #   true_u2_mean = np.array([[5, 3], [5, 3]])
 
-    # true_u1_mean = np.array([[-10, 0], [-3, -1]])
-    # true_u2_mean = np.array([[-10, -3], [0, -1]])
+    true_u1_mean = np.array([[-10, 0.5], [-3, -1]])
+    true_u2_mean = np.array([[-10, -3], [0, -1]])
 
     # Draw context and take action
-    bias_2 = np.random.uniform(0.8, 1)
+    bias_2 = np.random.uniform(0.0, 0.01)
     sigma = np.random.uniform(0, 1)
 
-    if rep < 10:  # Choose at random in early stages
+    if t < 10:  # Choose at random in early stages
       a1 = np.random.choice(2)
     else:  # Thompson sampling
       if policy=='adaptive':
@@ -267,16 +279,16 @@ def bandit(policy='adaptive', n=5):
   return y
 
 
-def compare_policies(replicates=10, n_private_obs=5):
+def compare_policies(replicates=10, time_horizon=50, n_private_obs=5):
   r1_list_adaptive = []
   r1_list_ind = []
   r1_list_coop = []
   for _ in range(replicates):
-    r1_list_adaptive_rep = bandit(n=n_private_obs)
+    r1_list_adaptive_rep = bandit(n=n_private_obs, time_horizon=time_horizon)
     r1_list_adaptive.append(r1_list_adaptive_rep)
-    r1_list_ind_rep = bandit(policy='ind', n=n_private_obs)
+    r1_list_ind_rep = bandit(policy='ind', n=n_private_obs, time_horizon=time_horizon)
     r1_list_ind.append(r1_list_ind_rep)
-    r1_list_coop_rep = bandit(policy='coop', n=n_private_obs)
+    r1_list_coop_rep = bandit(policy='coop', n=n_private_obs, time_horizon=time_horizon)
     r1_list_coop.append(r1_list_coop_rep)
 
   data = {'adapt': np.cumsum(r1_list_adaptive, axis=1),
@@ -297,5 +309,4 @@ def compare_policies(replicates=10, n_private_obs=5):
 
 
 if __name__ == "__main__":
-  # ToDo: note that this is using high-bias, low-variance
-  compare_policies(n_private_obs=2)
+  compare_policies(n_private_obs=2, time_horizon=200)
