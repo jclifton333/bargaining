@@ -218,9 +218,10 @@ def alternating(a1, a2, u1_mean=None, u2_mean=None, bias_2_1=np.zeros((2, 2)), b
   else:
     d1, _, _ = get_welfare_optimal_eq(nash.Game(x1_1_mean, x1_2_mean))
     _, d2, _ = get_welfare_optimal_eq(nash.Game(x2_1_mean, x2_2_mean))
+    close_enough = False
 
   r1, r2 = expected_payoffs(u1, u2, d1, d2)
-  return r1, r2
+  return r1, r2, close_enough
 
 
 def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1):
@@ -232,6 +233,7 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1):
   y1 = np.zeros(0)
   lm0 = Ridge()
   lm1 = Ridge()
+  close_enough_lst = []
 
   for t in range(time_horizon):
     # if np.random.random() < 1.0:
@@ -245,10 +247,10 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1):
     true_u2_mean = np.array([[-10, -3], [0, -1]])
 
     # Draw context and take action
-    bias_2 = np.random.uniform(0.0, 0.01)
-    sigma = np.random.uniform(0, 5)
+    bias_2 = np.random.uniform(0.0, 0.001)
+    sigma = np.random.uniform(0.0, 0.1)
 
-    if t < 10:  # Choose at random in early stages
+    if t < 20:  # Choose at random in early stages
       a1 = np.random.choice(2)
     else:  # Thompson sampling
       if policy in ['cb', 'mab']:
@@ -279,8 +281,8 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1):
     bias_2_1 = np.array([[-5, 0], [-5, 0]])*bias_2
     bias_2_2 = np.array([[5, 0], [5, 0]])*bias_2
 
-    r1, _ = alternating(a1, a2, u1_mean=true_u1_mean, u2_mean=true_u2_mean, bias_2_1=bias_2_1,
-                        bias_2_2=bias_2_2, sigma_u=0, sigma_x=sigma, n=n, sigma_tol=sigma_tol)
+    r1, _, close_enough_ = alternating(a1, a2, u1_mean=true_u1_mean, u2_mean=true_u2_mean, bias_2_1=bias_2_1,
+                                       bias_2_2=bias_2_2, sigma_u=0, sigma_x=sigma, n=n, sigma_tol=sigma_tol)
 
     # Update history
     if a1:
@@ -290,24 +292,29 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1):
       X0 = np.vstack((X0, [bias_2, sigma]))
       y0 = np.hstack((y0, r1))
     y = np.hstack((y, r1))
+    close_enough_lst.append(close_enough_)
 
-  return y
+  return y, close_enough_lst
 
 
-def compare_policies(replicates=10, time_horizon=50, n_private_obs=5, sigma_tol=1):
+def compare_policies(plot_name, replicates=10, time_horizon=50, n_private_obs=5, sigma_tol=1):
   r1_list_cb = []
   r1_list_mab = []
   r1_list_ind = []
   r1_list_coop = []
+  close_list_coop = []
   for _ in range(replicates):
-    r1_list_cb_rep = bandit(policy='cb', n=n_private_obs, time_horizon=time_horizon, sigma_tol=sigma_tol)
+    r1_list_cb_rep, _ = bandit(policy='cb', n=n_private_obs, time_horizon=time_horizon, sigma_tol=sigma_tol)
     r1_list_cb.append(r1_list_cb_rep)
-    r1_list_mab_rep = bandit(policy='mab', n=n_private_obs, time_horizon=time_horizon, sigma_tol=sigma_tol)
+    r1_list_mab_rep, _ = bandit(policy='mab', n=n_private_obs, time_horizon=time_horizon, sigma_tol=sigma_tol)
     r1_list_mab.append(r1_list_mab_rep)
-    r1_list_ind_rep = bandit(policy='ind', n=n_private_obs, time_horizon=time_horizon, sigma_tol=sigma_tol)
+    r1_list_ind_rep, _ = bandit(policy='ind', n=n_private_obs, time_horizon=time_horizon, sigma_tol=sigma_tol)
     r1_list_ind.append(r1_list_ind_rep)
-    r1_list_coop_rep = bandit(policy='coop', n=n_private_obs, time_horizon=time_horizon, sigma_tol=sigma_tol)
+    r1_list_coop_rep, close_coop = bandit(policy='coop', n=n_private_obs, time_horizon=time_horizon, sigma_tol=sigma_tol)
     r1_list_coop.append(r1_list_coop_rep)
+    close_list_coop.append(np.mean(close_coop))
+
+  print('prop close enough coop: {}'.format(np.mean(close_list_coop)))
 
   data = {'cb': np.cumsum(r1_list_cb, axis=1),
           'mab': np.cumsum(r1_list_mab, axis=1),
@@ -327,8 +334,12 @@ def compare_policies(replicates=10, time_horizon=50, n_private_obs=5, sigma_tol=
                   range(data['cb'].shape[1])], y=np.hstack(data['coop']),
               label='coop', color='r')
   plt.legend()
-  plt.show()
+  plt.savefig('{}.png'.format(plot_name))
+  plt.close()
+  return
 
 
 if __name__ == "__main__":
-  compare_policies(replicates=20, n_private_obs=2, time_horizon=200, sigma_tol=1.)
+  sigma_tol_list = [0.1, 0.5, 1., 2.]
+  for sigma_tol in sigma_tol_list:
+    compare_policies(sigma_tol, replicates=5, n_private_obs=2, time_horizon=1000, sigma_tol=sigma_tol)
