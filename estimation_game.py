@@ -192,10 +192,10 @@ def alternating(a1, a2, u1_mean=None, u2_mean=None, bias_2_1=np.zeros((2, 2)), b
 
       i += 1
       x2_2 = [np.array([[-10, -3], [1., -1]])]
-      x2_2.append(x2_2_mean)
+      x2_2.append(public_mean_2)
       # x2_1 = [x2_1_mean + np.random.uniform(low=-10, high=10, size=((2, 2))) for _ in range(n)]
       x2_1 = [np.array([[-10, -0.5], [-3, -1]])]
-      x2_1.append(x2_1_mean)
+      x2_1.append(public_mean_1)
       best_payoff_2_t, best_obs_22, best_obs_21, best_ix_2, best_a2, best_a1 = \
         get_welfare_optimal_observation(x2_2, x2_1, public_mean_2, public_mean_1, len(ixs_1) + len(ixs_2), x2_2_mean,
                                         x2_1_mean, ixs_2, sigma_x / np.sqrt(n), sigma_tol=sigma_tol)
@@ -224,7 +224,7 @@ def alternating(a1, a2, u1_mean=None, u2_mean=None, bias_2_1=np.zeros((2, 2)), b
   return r1, r2, close_enough
 
 
-def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1):
+def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.):
   a2 = 1  # Other player always plays collab
   X0 = np.zeros((0, 2))  # Will contain history of sigmas and biases
   X1 = np.zeros((0, 2))
@@ -248,7 +248,7 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1):
 
     # Draw context and take action
     bias_2 = np.random.uniform(0.0, 0.001)
-    sigma = np.random.uniform(0.0, 0.1)
+    sigma = np.random.uniform(0.0, sigma_upper)
 
     if t < 20:  # Choose at random in early stages
       a1 = np.random.choice(2)
@@ -294,23 +294,28 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1):
     y = np.hstack((y, r1))
     close_enough_lst.append(close_enough_)
 
+  pdb.set_trace()
   return y, close_enough_lst
 
 
-def compare_policies(plot_name, replicates=10, time_horizon=50, n_private_obs=5, sigma_tol=1):
+def compare_policies(plot_name, replicates=10, time_horizon=50, n_private_obs=5, sigma_tol=1, sigma_upper=1.):
   r1_list_cb = []
   r1_list_mab = []
   r1_list_ind = []
   r1_list_coop = []
   close_list_coop = []
   for _ in range(replicates):
-    r1_list_cb_rep, _ = bandit(policy='cb', n=n_private_obs, time_horizon=time_horizon, sigma_tol=sigma_tol)
+    r1_list_cb_rep, _ = bandit(policy='cb', n=n_private_obs, time_horizon=time_horizon, sigma_tol=sigma_tol,
+                               sigma_upper=sigma_upper)
     r1_list_cb.append(r1_list_cb_rep)
-    r1_list_mab_rep, _ = bandit(policy='mab', n=n_private_obs, time_horizon=time_horizon, sigma_tol=sigma_tol)
+    r1_list_mab_rep, _ = bandit(policy='mab', n=n_private_obs, time_horizon=time_horizon, sigma_tol=sigma_tol,
+                                sigma_upper=sigma_upper)
     r1_list_mab.append(r1_list_mab_rep)
-    r1_list_ind_rep, _ = bandit(policy='ind', n=n_private_obs, time_horizon=time_horizon, sigma_tol=sigma_tol)
+    r1_list_ind_rep, _ = bandit(policy='ind', n=n_private_obs, time_horizon=time_horizon, sigma_tol=sigma_tol,
+                                sigma_upper=sigma_upper)
     r1_list_ind.append(r1_list_ind_rep)
-    r1_list_coop_rep, close_coop = bandit(policy='coop', n=n_private_obs, time_horizon=time_horizon, sigma_tol=sigma_tol)
+    r1_list_coop_rep, close_coop = bandit(policy='coop', n=n_private_obs, time_horizon=time_horizon,
+                                          sigma_tol=sigma_tol, sigma_upper=sigma_upper)
     r1_list_coop.append(r1_list_coop_rep)
     close_list_coop.append(np.mean(close_coop))
 
@@ -342,4 +347,7 @@ def compare_policies(plot_name, replicates=10, time_horizon=50, n_private_obs=5,
 if __name__ == "__main__":
   sigma_tol_list = [0.1, 0.5, 1., 2.]
   for sigma_tol in sigma_tol_list:
-    compare_policies(sigma_tol, replicates=5, n_private_obs=2, time_horizon=1000, sigma_tol=sigma_tol)
+    compare_policies('tol={}-sigma-upper={}'.format(sigma_tol, 0.1), replicates=5, n_private_obs=2,
+                     time_horizon=1000, sigma_tol=sigma_tol, sigma_upper=0.1)
+    compare_policies('tol={}-sigma-upper={}'.format(sigma_tol, 1.), replicates=5, n_private_obs=2,
+                     time_horizon=1000, sigma_tol=sigma_tol, sigma_upper=1.)
