@@ -7,6 +7,7 @@ from sklearn.linear_model import Ridge
 from sklearn.ensemble import RandomForestRegressor
 from scipy.stats import norm
 from scipy.special import expit
+import seaborn as sns
 
 
 def get_welfare_optimal_profile(p1, p2):
@@ -172,6 +173,10 @@ def alternating(a1, a2, u1_mean=None, u2_mean=None, bias_2_1=np.zeros((2, 2)), b
       x2_2_mean += (best_obs_2 - x2_2_mean) / (t + 1 + n)
 
       i += 1
+      x2_2 = [x2_2_mean + np.random.uniform(low=-10, high=10, size=((2, 2))) for _ in range(n)]
+      x2_2.append(x2_2_mean)
+      x2_1 = [x2_1_mean + np.random.uniform(low=-10, high=10, size=((2, 2))) for _ in range(n)]
+      x2_1.append(x2_1_mean)
       best_payoff_2_t, best_obs_2, best_obs_1, best_ix_2, best_a2, best_a1 = \
         get_welfare_optimal_observation(x2_2, x2_1, public_mean_2, public_mean_1, len(ixs_1) + len(ixs_2), x2_2_mean,
                                         x2_1_mean, ixs_2)
@@ -193,11 +198,9 @@ def alternating(a1, a2, u1_mean=None, u2_mean=None, bias_2_1=np.zeros((2, 2)), b
   return r1, r2
 
 
-def bandit(policy='adaptive'):
+def bandit(policy='adaptive', n=5):
   n_rep = 100
-  # true_u1_mean = np.array([[-10, 0], [-3, -1]])
-  # true_u2_mean = np.array([[-10, -3], [0, -1]])
-
+  
   a2 = 1  # Other player always plays collab
   X0 = np.zeros((0, 2))  # Will contain history of sigmas and biases
   X1 = np.zeros((0, 2))
@@ -208,16 +211,19 @@ def bandit(policy='adaptive'):
   lm1 = Ridge()
 
   for rep in range(n_rep):
-    if np.random.random() < 0.5:
+    if np.random.random() < 1.0:
       true_u1_mean = np.array([[5, 3], [5, 3]])
       true_u2_mean = np.array([[0, 3], [0, 3]])
-    else:
-      true_u1_mean = np.array([[0, 3], [0, 3]])
-      true_u2_mean = np.array([[5, 3], [5, 3]])
+    # else:
+    #   true_u1_mean = np.array([[0, 3], [0, 3]])
+    #   true_u2_mean = np.array([[5, 3], [5, 3]])
+
+    # true_u1_mean = np.array([[-10, 0], [-3, -1]])
+    # true_u2_mean = np.array([[-10, -3], [0, -1]])
 
     # Draw context and take action
-    bias_2 = np.random.uniform(0, 1)
-    sigma = np.random.uniform(1, 10)
+    bias_2 = np.random.uniform(0.8, 1)
+    sigma = np.random.uniform(0, 1)
 
     if rep < 10:  # Choose at random in early stages
       a1 = np.random.choice(2)
@@ -247,7 +253,7 @@ def bandit(policy='adaptive'):
     bias_2_2 = np.array([[5, 0], [5, 0]])*bias_2
 
     r1, _ = alternating(a1, a2, u1_mean=true_u1_mean, u2_mean=true_u2_mean, bias_2_1=bias_2_1,
-                        bias_2_2=bias_2_2, sigma_u=0, sigma_x=sigma, n=10)
+                        bias_2_2=bias_2_2, sigma_u=0, sigma_x=sigma, n=n)
 
     # Update history
     if a1:
@@ -261,23 +267,35 @@ def bandit(policy='adaptive'):
   return y
 
 
-if __name__ == "__main__":
-  replicates = 2
+def compare_policies(replicates=10, n_private_obs=5):
   r1_list_adaptive = []
   r1_list_ind = []
   r1_list_coop = []
   for _ in range(replicates):
-    print('foo')
-    r1_list_adaptive_rep = bandit()
+    r1_list_adaptive_rep = bandit(n=n_private_obs)
     r1_list_adaptive.append(r1_list_adaptive_rep)
-    r1_list_ind_rep = bandit(policy='ind')
+    r1_list_ind_rep = bandit(policy='ind', n=n_private_obs)
     r1_list_ind.append(r1_list_ind_rep)
-    r1_list_coop_rep = bandit(policy='coop')
+    r1_list_coop_rep = bandit(policy='coop', n=n_private_obs)
     r1_list_coop.append(r1_list_coop_rep)
 
   data = {'adapt': np.cumsum(r1_list_adaptive, axis=1),
           'ind': np.cumsum(r1_list_ind, axis=1),
           'coop': np.cumsum(r1_list_coop, axis=1),
           'timepoint': np.arange(len(r1_list_coop[0]))}
-  plt.plot(data['adapt'].mean, label='adapt')
+  sns.lineplot(x=[i for _ in range(replicates) for i in
+                  range(data['adapt'].shape[1])], y=np.hstack(data['adapt']),
+              label='adapt')
+  sns.lineplot(x=[i for _ in range(replicates) for i in
+                  range(data['adapt'].shape[1])], y=np.hstack(data['ind']),
+              label='ind')
+  sns.lineplot(x=[i for _ in range(replicates) for i in
+                  range(data['adapt'].shape[1])], y=np.hstack(data['coop']),
+              label='coop', color='r')
+  plt.legend()
   plt.show()
+
+
+if __name__ == "__main__":
+  # ToDo: note that this is using high-bias, low-variance
+  compare_policies(n_private_obs=2)
