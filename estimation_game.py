@@ -5,6 +5,7 @@ import pdb
 import matplotlib.pyplot as plt
 from sklearn.linear_model import Ridge
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.kernel_ridge import KernelRidge
 from scipy.stats import norm
 from scipy.special import expit
 import seaborn as sns
@@ -226,13 +227,13 @@ def alternating(a1, a2, u1_mean=None, u2_mean=None, bias_2_1=np.zeros((2, 2)), b
 
 def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.):
   a2 = 1  # Other player always plays collab
-  X0 = np.zeros((0, 2))  # Will contain history of sigmas and biases
-  X1 = np.zeros((0, 2))
+  X0 = np.zeros((0, 1))  # Will contain history of sigmas
+  X1 = np.zeros((0, 1))
   y = np.zeros(0)
   y0 = np.zeros(0)  # Will contain history of rewards
   y1 = np.zeros(0)
-  lm0 = Ridge()
-  lm1 = Ridge()
+  lm0 = KernelRidge()
+  lm1 = KernelRidge()
   close_enough_lst = []
 
   for t in range(time_horizon):
@@ -247,8 +248,8 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.):
     true_u2_mean = np.array([[-10, -3], [0, -1]])
 
     # Draw context and take action
-    bias_2 = np.random.uniform(0.0, 0.001)
-    sigma = np.random.uniform(0.0, sigma_upper)
+    bias_2 = np.random.uniform(0.0, 0.0)
+    sigma = np.random.uniform(0, sigma_upper)
 
     if t < 20:  # Choose at random in early stages
       a1 = np.random.choice(2)
@@ -257,8 +258,8 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.):
         if policy == 'cb':
           lm0.fit(X0, y0)
           lm1.fit(X1, y1)
-          q0 = lm0.predict([[bias_2, sigma]])
-          q1 = lm1.predict([[bias_2, sigma]])
+          q0 = lm0.predict([[sigma]])
+          q1 = lm1.predict([[sigma]])
         elif policy == 'mab':
           q0 = y0.mean()
           q1 = y1.mean()
@@ -286,15 +287,14 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.):
 
     # Update history
     if a1:
-      X1 = np.vstack((X1, [bias_2, sigma]))
+      X1 = np.vstack((X1, [sigma]))
       y1 = np.hstack((y1, r1))
     else:
-      X0 = np.vstack((X0, [bias_2, sigma]))
+      X0 = np.vstack((X0, [sigma]))
       y0 = np.hstack((y0, r1))
     y = np.hstack((y, r1))
     close_enough_lst.append(close_enough_)
 
-  pdb.set_trace()
   return y, close_enough_lst
 
 
@@ -326,18 +326,24 @@ def compare_policies(plot_name, replicates=10, time_horizon=50, n_private_obs=5,
           'ind': np.cumsum(r1_list_ind, axis=1),
           'coop': np.cumsum(r1_list_coop, axis=1),
           'timepoint': np.arange(len(r1_list_coop[0]))}
+
+  cb_mean, cb_se = data['cb'][:, -1].mean(), data['cb'][:, -1].std() / np.sqrt(replicates)
+  mab_mean, mab_se = data['mab'][:, -1].mean(), data['mab'][:, -1].std() / np.sqrt(replicates)
+
+  print('cb: {} mab: {}'.format((cb_mean, cb_se), (mab_mean, mab_se)))
+
   sns.lineplot(x=[i for _ in range(replicates) for i in
                   range(data['cb'].shape[1])], y=np.hstack(data['cb']),
               label='cb')
   sns.lineplot(x=[i for _ in range(replicates) for i in
                   range(data['mab'].shape[1])], y=np.hstack(data['mab']),
                label='mab', color='k')
-  sns.lineplot(x=[i for _ in range(replicates) for i in
-                  range(data['cb'].shape[1])], y=np.hstack(data['ind']),
-              label='ind')
-  sns.lineplot(x=[i for _ in range(replicates) for i in
-                  range(data['cb'].shape[1])], y=np.hstack(data['coop']),
-              label='coop', color='r')
+  # sns.lineplot(x=[i for _ in range(replicates) for i in
+  #                 range(data['cb'].shape[1])], y=np.hstack(data['ind']),
+  #             label='ind')
+  # sns.lineplot(x=[i for _ in range(replicates) for i in
+  #                 range(data['cb'].shape[1])], y=np.hstack(data['coop']),
+  #             label='coop', color='r')
   plt.legend()
   plt.savefig('{}.png'.format(plot_name))
   plt.close()
@@ -345,9 +351,9 @@ def compare_policies(plot_name, replicates=10, time_horizon=50, n_private_obs=5,
 
 
 if __name__ == "__main__":
-  sigma_tol_list = [0.1, 0.5, 1., 2.]
+  sigma_tol_list = [2]
   for sigma_tol in sigma_tol_list:
-    compare_policies('tol={}-sigma-upper={}'.format(sigma_tol, 0.1), replicates=5, n_private_obs=2,
-                     time_horizon=1000, sigma_tol=sigma_tol, sigma_upper=0.1)
-    compare_policies('tol={}-sigma-upper={}'.format(sigma_tol, 1.), replicates=5, n_private_obs=2,
-                     time_horizon=1000, sigma_tol=sigma_tol, sigma_upper=1.)
+    compare_policies('tol={}-sigma-upper={}'.format(sigma_tol, 5), replicates=200, n_private_obs=2,
+                     time_horizon=200, sigma_tol=sigma_tol, sigma_upper=5)
+    # compare_policies('tol={}-sigma-upper={}'.format(sigma_tol, 1.), replicates=50, n_private_obs=2,
+    #                  time_horizon=200, sigma_tol=sigma_tol, sigma_upper=1.)
