@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from sklearn.linear_model import Ridge
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.kernel_ridge import KernelRidge
+from sklearn.tree import DecisionTreeRegressor
 from scipy.stats import norm
 from scipy.special import expit
 import seaborn as sns
@@ -232,8 +233,8 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.):
   y = np.zeros(0)
   y0 = np.zeros(0)  # Will contain history of rewards
   y1 = np.zeros(0)
-  lm0 = KernelRidge()
-  lm1 = KernelRidge()
+  lm0 = DecisionTreeRegressor(max_depth=2)
+  lm1 = DecisionTreeRegressor(max_depth=2)
   close_enough_lst = []
 
   for t in range(time_horizon):
@@ -295,6 +296,8 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.):
     y = np.hstack((y, r1))
     close_enough_lst.append(close_enough_)
 
+  # y1_hat = lm1.predict(X1)
+  # y0_hat = lm0.predict(X0)
   return y, close_enough_lst
 
 
@@ -353,7 +356,8 @@ def compare_policies(plot_name, replicates=10, time_horizon=50, n_private_obs=5,
 if __name__ == "__main__":
   sigma_tol_list = [2]
   for sigma_tol in sigma_tol_list:
-    compare_policies('tol={}-sigma-upper={}'.format(sigma_tol, 5), replicates=200, n_private_obs=2,
-                     time_horizon=200, sigma_tol=sigma_tol, sigma_upper=5)
+    compare_policies('tol={}-sigma-upper={}'.format(sigma_tol, 5),
+                     replicates=30, n_private_obs=2,
+                     time_horizon=300, sigma_tol=sigma_tol, sigma_upper=5)
     # compare_policies('tol={}-sigma-upper={}'.format(sigma_tol, 1.), replicates=50, n_private_obs=2,
     #                  time_horizon=200, sigma_tol=sigma_tol, sigma_upper=1.)
