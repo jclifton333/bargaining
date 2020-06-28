@@ -223,7 +223,7 @@ def alternating(a1, a2, u1_mean=None, u2_mean=None, bias_2_1=np.zeros((2, 2)), b
   return r1, r2
 
 
-def bandit(policy='adaptive', time_horizon=50, n=5, sigma_tol=1):
+def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1):
   a2 = 1  # Other player always plays collab
   X0 = np.zeros((0, 2))  # Will contain history of sigmas and biases
   X1 = np.zeros((0, 2))
@@ -246,18 +246,20 @@ def bandit(policy='adaptive', time_horizon=50, n=5, sigma_tol=1):
 
     # Draw context and take action
     bias_2 = np.random.uniform(0.0, 0.01)
-    sigma = np.random.uniform(0, 1)
+    sigma = np.random.uniform(0, 5)
 
     if t < 10:  # Choose at random in early stages
       a1 = np.random.choice(2)
     else:  # Thompson sampling
-      if policy=='adaptive':
-        lm0.fit(X0, y0)
-        lm1.fit(X1, y1)
-        q0 = lm0.predict([[bias_2, sigma]])
-        q1 = lm1.predict([[bias_2, sigma]])
-        # q0 = y0.mean()
-        # q1 = y1.mean()
+      if policy in ['cb', 'mab']:
+        if policy == 'cb':
+          lm0.fit(X0, y0)
+          lm1.fit(X1, y1)
+          q0 = lm0.predict([[bias_2, sigma]])
+          q1 = lm1.predict([[bias_2, sigma]])
+        elif policy == 'mab':
+          q0 = y0.mean()
+          q1 = y1.mean()
         if q1 > q0:
           if np.random.random() < 0.95:
             a1 = 1
@@ -293,33 +295,40 @@ def bandit(policy='adaptive', time_horizon=50, n=5, sigma_tol=1):
 
 
 def compare_policies(replicates=10, time_horizon=50, n_private_obs=5, sigma_tol=1):
-  r1_list_adaptive = []
+  r1_list_cb = []
+  r1_list_mab = []
   r1_list_ind = []
   r1_list_coop = []
   for _ in range(replicates):
-    r1_list_adaptive_rep = bandit(n=n_private_obs, time_horizon=time_horizon, sigma_tol=sigma_tol)
-    r1_list_adaptive.append(r1_list_adaptive_rep)
+    r1_list_cb_rep = bandit(policy='cb', n=n_private_obs, time_horizon=time_horizon, sigma_tol=sigma_tol)
+    r1_list_cb.append(r1_list_cb_rep)
+    r1_list_mab_rep = bandit(policy='mab', n=n_private_obs, time_horizon=time_horizon, sigma_tol=sigma_tol)
+    r1_list_mab.append(r1_list_mab_rep)
     r1_list_ind_rep = bandit(policy='ind', n=n_private_obs, time_horizon=time_horizon, sigma_tol=sigma_tol)
     r1_list_ind.append(r1_list_ind_rep)
     r1_list_coop_rep = bandit(policy='coop', n=n_private_obs, time_horizon=time_horizon, sigma_tol=sigma_tol)
     r1_list_coop.append(r1_list_coop_rep)
 
-  data = {'adapt': np.cumsum(r1_list_adaptive, axis=1),
+  data = {'cb': np.cumsum(r1_list_cb, axis=1),
+          'mab': np.cumsum(r1_list_mab, axis=1),
           'ind': np.cumsum(r1_list_ind, axis=1),
           'coop': np.cumsum(r1_list_coop, axis=1),
           'timepoint': np.arange(len(r1_list_coop[0]))}
   sns.lineplot(x=[i for _ in range(replicates) for i in
-                  range(data['adapt'].shape[1])], y=np.hstack(data['adapt']),
-              label='adapt')
+                  range(data['cb'].shape[1])], y=np.hstack(data['cb']),
+              label='cb')
   sns.lineplot(x=[i for _ in range(replicates) for i in
-                  range(data['adapt'].shape[1])], y=np.hstack(data['ind']),
+                  range(data['mab'].shape[1])], y=np.hstack(data['mab']),
+               label='mab', color='k')
+  sns.lineplot(x=[i for _ in range(replicates) for i in
+                  range(data['cb'].shape[1])], y=np.hstack(data['ind']),
               label='ind')
   sns.lineplot(x=[i for _ in range(replicates) for i in
-                  range(data['adapt'].shape[1])], y=np.hstack(data['coop']),
+                  range(data['cb'].shape[1])], y=np.hstack(data['coop']),
               label='coop', color='r')
   plt.legend()
   plt.show()
 
 
 if __name__ == "__main__":
-  compare_policies(n_private_obs=2, time_horizon=200, sigma_tol=0.1)
+  compare_policies(replicates=20, n_private_obs=2, time_horizon=200, sigma_tol=1.)
