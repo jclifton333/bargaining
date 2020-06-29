@@ -233,8 +233,8 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.):
   y = np.zeros(0)
   y0 = np.zeros(0)  # Will contain history of rewards
   y1 = np.zeros(0)
-  lm0 = DecisionTreeRegressor(max_depth=2)
-  lm1 = DecisionTreeRegressor(max_depth=2)
+  lm0 = DecisionTreeRegressor(max_depth=2, min_samples_split=0.2)
+  lm1 = DecisionTreeRegressor(max_depth=2, min_samples_split=0.2)
   close_enough_lst = []
 
   for t in range(time_horizon):
@@ -252,7 +252,7 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.):
     bias_2 = np.random.uniform(0.0, 0.0)
     sigma = np.random.uniform(0, sigma_upper)
 
-    if t < 20:  # Choose at random in early stages
+    if t < 100:  # Choose at random in early stages
       a1 = np.random.choice(2)
     else:  # Thompson sampling
       if policy in ['cb', 'mab']:
@@ -341,12 +341,12 @@ def compare_policies(plot_name, replicates=10, time_horizon=50, n_private_obs=5,
   sns.lineplot(x=[i for _ in range(replicates) for i in
                   range(data['mab'].shape[1])], y=np.hstack(data['mab']),
                label='mab', color='k')
-  # sns.lineplot(x=[i for _ in range(replicates) for i in
-  #                 range(data['cb'].shape[1])], y=np.hstack(data['ind']),
-  #             label='ind')
-  # sns.lineplot(x=[i for _ in range(replicates) for i in
-  #                 range(data['cb'].shape[1])], y=np.hstack(data['coop']),
-  #             label='coop', color='r')
+  sns.lineplot(x=[i for _ in range(replicates) for i in
+                range(data['cb'].shape[1])], y=np.hstack(data['ind']),
+            label='ind')
+  sns.lineplot(x=[i for _ in range(replicates) for i in
+                range(data['cb'].shape[1])], y=np.hstack(data['coop']),
+            label='coop', color='r')
   plt.legend()
   plt.savefig('{}.png'.format(plot_name))
   plt.close()
@@ -354,10 +354,9 @@ def compare_policies(plot_name, replicates=10, time_horizon=50, n_private_obs=5,
 
 
 if __name__ == "__main__":
-  sigma_tol_list = [2]
+  sigma_tol_list = [0.1, 2]
   for sigma_tol in sigma_tol_list:
-    compare_policies('tol={}-sigma-upper={}'.format(sigma_tol, 5),
-                     replicates=30, n_private_obs=2,
+    compare_policies('tol={}-sigma-upper={}'.format(sigma_tol, 5), replicates=100, n_private_obs=2,
                      time_horizon=300, sigma_tol=sigma_tol, sigma_upper=5)
-    # compare_policies('tol={}-sigma-upper={}'.format(sigma_tol, 1.), replicates=50, n_private_obs=2,
-    #                  time_horizon=200, sigma_tol=sigma_tol, sigma_upper=1.)
+    compare_policies('tol={}-sigma-upper={}'.format(sigma_tol, 0.1), replicates=100, n_private_obs=2,
+                     time_horizon=300, sigma_tol=sigma_tol, sigma_upper=0.1)
