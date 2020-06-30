@@ -252,7 +252,7 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.):
     bias_2 = np.random.uniform(0.0, 0.0)
     sigma = np.random.uniform(0, sigma_upper)
 
-    if t < 300:  # Choose at random in early stages
+    if t < time_horizon:  # Choose at random in early stages
       a1 = np.random.choice(2)
     else:  # Thompson sampling
       if policy in ['cb', 'mab']:
@@ -296,8 +296,20 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.):
     y = np.hstack((y, r1))
     close_enough_lst.append(close_enough_)
 
-  # y1_hat = lm1.predict(X1)
-  # y0_hat = lm0.predict(X0)
+  lm0.fit(X0, y0)
+  lm1.fit(X1, y1)
+  xrange_ = np.linspace(0, sigma_upper, 100).reshape(-1, 1)
+  y0_hat = lm0.predict(xrange_)
+  y1_hat = lm1.predict(xrange_)
+  # plt.scatter(X0, y0, label='ind payoffs')
+  plt.plot(xrange_, y0_hat, label='ind')
+  # plt.scatter(X1, y1, label='coop payoffs')
+  plt.plot(xrange_, y1_hat, label='coop')
+  plt.xlabel('sigma')
+  plt.ylabel('Estimated expected payoff')
+  plt.title('Decision tree estimates of conditional rewards\nunder each reporting policy')
+  plt.legend()
+  plt.show()
   return y, close_enough_lst
 
 
@@ -357,9 +369,9 @@ def compare_policies(plot_name, replicates=10, time_horizon=50, n_private_obs=5,
 
 
 if __name__ == "__main__":
-  sigma_tol_list = [0.01]
+  sigma_tol_list = [2]
   for sigma_tol in sigma_tol_list:
     compare_policies('tol={}-sigma-upper={}'.format(sigma_tol, 5), replicates=100, n_private_obs=2,
-                     time_horizon=600, sigma_tol=sigma_tol, sigma_upper=5)
+                     time_horizon=1000, sigma_tol=sigma_tol, sigma_upper=5)
     compare_policies('tol={}-sigma-upper={}'.format(sigma_tol, 0.1), replicates=100, n_private_obs=2,
                      time_horizon=600, sigma_tol=sigma_tol, sigma_upper=0.1)
