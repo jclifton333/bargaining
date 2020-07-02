@@ -136,7 +136,7 @@ def random_nash(sigma_x=1, n=10):
   print(np.mean(crash_lst))
 
 
-def coop_bargaining(a1, a2, beta=1, sigma=1, tau=1, p_L=0.8, p_U=1.2, epsilon_1=0.65, epsilon_2=0.8,
+def coop_bargaining(a1, a2, beta=1, sigma=1, tau=1, p_L=0.5, p_U=1.5, epsilon_1=0.65, epsilon_2=0.8,
                     d1=0.1, d2=0.1):
   """
   epsilon_2 > epsilon_1 by default represents exploitation of player 1 by player 2
@@ -150,7 +150,7 @@ def coop_bargaining(a1, a2, beta=1, sigma=1, tau=1, p_L=0.8, p_U=1.2, epsilon_1=
     beta_i \iid LogNormal(mu, sigma)
     default iff beta1_tilde/beta2_tilde > tau
   """
-  mu = np.log(beta) - sigma/2
+  mu = np.log(beta) - sigma**2/2
   beta1_hat = np.random.lognormal(mean=mu, sigma=sigma)
   beta2_hat = np.random.lognormal(mean=mu, sigma=sigma)
   beta1_tilde = beta1_hat * np.sqrt(tau) * epsilon_1
@@ -293,12 +293,14 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.,
 
     # Draw context and take action
     bias_2 = np.random.uniform(0.0, 0.0)
-    sigma = np.random.uniform(0, sigma_upper)
+    sigma = np.random.uniform(0.25, 0.75)  # ToDo: pass sigma_upper
 
-    if t < time_horizon:  # Choose at random in early stages
+    if t < 100:  # Choose at random in early stages
       a1 = np.random.choice(2)
-    else:  # Thompson sampling
-      if policy in ['cb', 'mab']:
+    if policy in ['cb', 'mab']:
+      if t < int(time_horizon / 10):
+        a1 = np.random.choice(2)
+      else:
         if policy == 'cb':
           lm0.fit(X0, y0)
           lm1.fit(X1, y1)
@@ -317,10 +319,10 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.,
             a1 = 0
           else:
             a1 = 1
-      elif policy=='ind':
-        a1 = 0
-      elif policy=='coop':
-        a1 = 1
+    elif policy=='ind':
+      a1 = 0
+    elif policy=='coop':
+      a1 = 1
 
     # Observe reward
     bias_2_1 = np.array([[-5, 0], [-5, 0]])*bias_2
