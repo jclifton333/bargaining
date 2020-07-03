@@ -136,7 +136,7 @@ def random_nash(sigma_x=1, n=10):
   print(np.mean(crash_lst))
 
 
-def coop_bargaining(a1, a2, beta=1, sigma=1, tau=1, p_L=0.5, p_U=1.5, epsilon_1=0.65, epsilon_2=0.8,
+def coop_bargaining(a1, a2, beta=1, sigma=1, tau=1, p_L=0.5, p_U=1.5, epsilon_1=0.50, epsilon_2=1.,
                     d1=0.1, d2=0.1):
   """
   epsilon_2 > epsilon_1 by default represents exploitation of player 1 by player 2
@@ -157,6 +157,7 @@ def coop_bargaining(a1, a2, beta=1, sigma=1, tau=1, p_L=0.5, p_U=1.5, epsilon_1=
   beta2_tilde = beta2_hat / (np.sqrt(tau) * epsilon_2)
   ratio = beta1_tilde / beta2_tilde
   close_enough = (ratio < tau)
+  # ToDo: handle comparison to disagreement points?
   if a1 == 1 and a2 == 1:
     if close_enough:
       betaHat = np.sqrt(beta1_tilde * beta2_tilde)
@@ -175,6 +176,28 @@ def coop_bargaining(a1, a2, beta=1, sigma=1, tau=1, p_L=0.5, p_U=1.5, epsilon_1=
     else:
       r1, r2 = d1, d2
   return r1, r2, close_enough
+
+
+def monotone(u1=None, u2=None):
+  if u1 is None:
+    u1 = np.array([[-10, 0.5], [-3, -1]])
+  if u2 is None:
+    u2 = np.array([[-10, -3], [0, -1]])
+
+  all_payoffs = []
+  for rep in range(100):
+    direction = np.random.uniform(low=-1, high=1, size=(2, 2))
+    payoffs_1 = []
+    magnitudes = np.linspace(0, 10, 100)
+    for magnitude in magnitudes:
+      u1_perturbed = u1 + direction*magnitude
+      _, _, v1 = get_welfare_optimal_eq(nash.Game(u1_perturbed, u2))
+      payoffs_1.append(v1)
+    all_payoffs.append(payoffs_1)
+
+  plt.plot(magnitudes, np.mean(all_payoffs, axis=0))
+  plt.show()
+  return
 
 
 def alternating(a1, a2, u1_mean=None, u2_mean=None, bias_2_1=np.zeros((2, 2)), bias_2_2=np.zeros((2,2)), n=2, sigma_u=1,
@@ -276,8 +299,10 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.,
   y = np.zeros(0)
   y0 = np.zeros(0)  # Will contain history of rewards
   y1 = np.zeros(0)
-  lm0 = DecisionTreeRegressor(max_depth=2, min_samples_split=0.2)
-  lm1 = DecisionTreeRegressor(max_depth=2, min_samples_split=0.2)
+  # lm0 = DecisionTreeRegressor(max_depth=2, min_samples_split=0.2)
+  # lm1 = DecisionTreeRegressor(max_depth=2, min_samples_split=0.2)
+  lm0 = RandomForestRegressor(n_estimators=10, max_depth=2, min_samples_split=0.2)
+  lm1 = RandomForestRegressor(n_estimators=10, max_depth=2, min_samples_split=0.2)
   close_enough_lst = []
 
   for t in range(time_horizon):
@@ -293,13 +318,13 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.,
 
     # Draw context and take action
     bias_2 = np.random.uniform(0.0, 0.0)
-    sigma = np.random.uniform(0.25, 0.75)  # ToDo: pass sigma_upper
+    sigma = np.random.uniform(0.0, 0.4)  # ToDo: pass sigma_upper
 
-    if t < 100:  # Choose at random in early stages
-      a1 = np.random.choice(2)
     if policy in ['cb', 'mab']:
-      if t < int(time_horizon / 10):
-        a1 = np.random.choice(2)
+      if t < int(time_horizon/4):  # Choose at random in early stages
+        a1 = 1
+      elif int(time_horizon/5) <= t < int(time_horizon/2):
+        a1 = 0
       else:
         if policy == 'cb':
           lm0.fit(X0, y0)
@@ -358,7 +383,8 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.,
   # plt.title('Decision tree estimates of conditional rewards\nunder each reporting policy')
   # plt.legend()
   # plt.show()
-  return y, close_enough_lst
+  # pdb.set_trace()
+  return y[int(time_horizon/2):], close_enough_lst
 
 
 def compare_policies(plot_name, replicates=10, time_horizon=50, n_private_obs=5, sigma_tol=1, sigma_upper=1.):
@@ -421,5 +447,5 @@ def compare_policies(plot_name, replicates=10, time_horizon=50, n_private_obs=5,
 if __name__ == "__main__":
   sigma_tol_list = [2]
   for sigma_tol in sigma_tol_list:
-    compare_policies(None, replicates=200, n_private_obs=2,
-                     time_horizon=500, sigma_tol=sigma_tol, sigma_upper=1)
+    compare_policies(None, replicates=100, n_private_obs=2,
+                     time_horizon=300, sigma_tol=sigma_tol, sigma_upper=1)
