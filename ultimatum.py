@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import pdb
 from itertools import product
 import seaborn as sns
+np.set_printoptions(suppress=True)
 
 
 def generate_ultimatum_data(policy, n=100):
@@ -15,10 +16,10 @@ def generate_ultimatum_data(policy, n=100):
   :param policy: maps split to 0 (reject) or 1 (accept)
   """
   splits = np.random.uniform(size=n)
-  # stakes = np.random.lognormal(size=n)
-  stakes = np.random.uniform(1, 2, size=n)
+  stakes = np.ones(n)
   actions = [policy(sp, st) for sp, st in zip(splits, stakes)]
-  return splits, actions, stakes
+  horizons = np.random.poisson(5, size=n)
+  return splits, actions, horizons, stakes
 
 
 def simple_boltzmann_ll(r, splits, actions, temp=1.):
@@ -157,32 +158,33 @@ def repeated_ll(r, t, p, splits, actions, temp=1.):
       log_lik += u_acc - np.log(np.exp(u_rej) + np.exp(u_acc))
     else:
       log_lik += u_rej - np.log(np.exp(u_rej) + np.exp(u_acc))
-  return -log_lik + r**2 + t**2 + p**2
+    pdb.set_trace()
+  return -log_lik
 
 
-def maximize_all_likelihoods(splits, actions, temp=1.):
-  def simple(r):
-    return simple_boltzmann_ll(r, splits, actions, temp=temp)
-  def fairness(theta):
-    return fairness_boltzmann_ll(theta[0], theta[1], theta[2],
-                                 splits, actions,
-                                 temp=temp)
-  def repeated(theta):
-    return repeated_ll(theta[0], theta[1], theta[2], splits, actions,
-                       temp=temp)
+def combined_ll(f, splits, actions, horizons, penalty=1., temp=1.):
+  log_lik = 0.
+  for s, a, h in zip(splits, actions, horizons):
+    indicator = s < 0.4
+    u = temp*(s - indicator*f)
+    if a:
+      log_lik += (u - np.log(1 + np.exp(u)))
+    else:
+      log_lik -= np.log(1 + np.exp(u))
+    return -log_lik
 
-  simple_res = minimize(simple, x0=[0.5], method='trust-constr',
-                        bounds=Bounds([-1], [1]))
-  fairness_res = minimize(fairness, x0=np.ones(3)*0.5,
-                          method='trust-constr',
-                          bounds=Bounds([-1, -1, -1], [1, 1, 1]))
-  repeated_res = minimize(repeated,
-                          x0=np.ones(3)*0.5,
-                          method='trust-constr',
-                          bounds=Bounds([-1, -1, -3], [1, 1, 3]))
-  print(simple_res.x[0], fairness_res.x[0], repeated_res.x[0])
-  # print(repeated_res.x)
-  return
+
+def maximize_all_likelihoods(splits, actions, horizons, temp=0.1, penalty=0.1):
+  def combined(theta):
+    return combined_ll(theta, splits, actions, horizons, temp=temp, penalty=penalty)
+
+  def minimize_wrapper(x0):
+    return minimize(combined, x0=np.array([x0]), method='trust-constr', bounds=Bounds([-0.1], [1.1]))
+
+  for i in range(10):
+    res = minimize_wrapper(np.random.uniform(0., 1.))
+    print(res.x, res.success)
+  return res
 
 
 def conjugate(s, n, alpha_f=2., alpha_p=2.):
@@ -215,13 +217,11 @@ def conjugate(s, n, alpha_f=2., alpha_p=2.):
   return f_posterior_density
 
 
-if __name__ == "__main__":
-  # TODO: use models from the literature
-  # see https://www.sas.upenn.edu/~cb36/files/2010_anem.pdf
+def run_and_plot_simple_prior_model():
   np.random.seed(4)
 
   def real_ev(sp, st):
-    return sp - (sp<0.4)
+    return sp - (sp < 0.4)
 
   def real_policy(sp, st):
     num = np.exp(real_ev(sp, st))
@@ -259,7 +259,7 @@ if __name__ == "__main__":
     splits, actions, stakes = \
       generate_ultimatum_data(real_policy, n=1000)
     tb, prior, model = big_model(splits, stakes, actions, unif_upper=10,
-                                gamma_param=gamma_param)
+                                 gamma_param=gamma_param)
     tb_list.append(tb)
     prior_list.append(prior)
 
@@ -268,7 +268,7 @@ if __name__ == "__main__":
   evs_prior = [[] for _ in range(len(tb_list))]
   offerer_evs = [[] for _ in range(len(tb_list))]
   s_range = np.linspace(0, 1, 20)
-  scale = 1 
+  scale = 1
   for s in s_range:
     ua_list = []
     ur_list = []
@@ -279,8 +279,8 @@ if __name__ == "__main__":
       pri = prior_list[i]
       for j, post in enumerate(np.array(tb)[np.where(tb.diverging == False)]):
         # Get posterior expectations
-        # u_a = post['r']*s - post['f']*(s< 0.5-post['t']/2)
-        u_a = s - post['f']*(s< 0.4)
+        #       u_a = post['r']*s - post['f']*(s< 0.5-post['t']/2)
+        u_a = s - post['f'] * (s < 0.4)
         # u_r = scale*post['p']*(s < 0.5-post['t']/2)
         u_r = 0
         u_diff = u_a - u_r
@@ -288,7 +288,7 @@ if __name__ == "__main__":
         ur_list.append(u_r)
 
         # Get prior expectations
-        u_a_pri = s - pri['f'][j]*(s< 0.4)
+        u_a_pri = s - pri['f'][j] * (s < 0.4)
         # u_r_pri = scale*pri['p'][j]*(s < 0.5-pri['t'][j]/2)
         u_r_pri = 0
         ua_prior_list.append(u_a_pri)
@@ -296,17 +296,17 @@ if __name__ == "__main__":
 
       accept_prob = np.mean(np.array(ua_list) - np.array(ur_list) > 0)
       accept_prob_prior = np.mean(np.array(ua_prior_list) - np.array(ur_prior_list) > 0)
-      evs[i].append(accept_prob*(1-s)*scale)
-      evs_prior[i].append(accept_prob_prior*(1-s)*scale)
+      evs[i].append(accept_prob * (1 - s) * scale)
+      evs_prior[i].append(accept_prob_prior * (1 - s) * scale)
 
   # pm.traceplot(tb_list[0])
   # pm.traceplot(tb_list[1])
   # plt.show()
-  real_off_ev = lambda s: (real_ev(s, scale) > 0)*(1-s)*scale
+  real_off_ev = lambda s: (real_ev(s, scale) > 0) * (1 - s) * scale
   colors = ['b', 'g', 'r', 'k', 'y']
   for i in range(len(sample_size_list)):
     p_post = [var['p'] for var in tb_list[i]]
-    sns.kdeplot(p_post, color=colors[i], 
+    sns.kdeplot(p_post, color=colors[i],
                 label='n={}'.format(sample_size_list[i]),
                 shade=True)
   # plt.title('Posterior densities for repeated play parameter')
@@ -322,7 +322,7 @@ if __name__ == "__main__":
     prior = gamma_param_list[i]
     color = colors[i]
     max_s = s_range[np.argmax(ev)]
-    plt.plot(s_range, ev, label='(alpha_f,alpha_r)={}'.format((prior*0.4, 0.4)), color=color)
+    plt.plot(s_range, ev, label='(alpha_f,alpha_r)={}'.format((prior * 0.4, 0.4)), color=color)
     plt.plot([max_s], [np.min(evs)], marker='*', markersize=9, color=color)
     plt.plot(s_range, ev_prior, color=color, linestyle='dashed')
   # plt.plot(s_range, evs_prior[0], label='prior', color='k')
@@ -333,7 +333,24 @@ if __name__ == "__main__":
   plt.legend(loc=1)
   plt.show()
 
-  # maximize_all_likelihoods(splits, actions)
+
+
+if __name__ == "__main__":
+  # # TODO: use models from the literature
+  # see https://www.sas.upenn.edu/~cb36/files/2010_anem.pdf
+  def real_ev(sp, st):
+    return sp - (sp < 0.4)
+
+  def real_policy(sp, st):
+    num = np.exp(real_ev(sp, st))
+    prob = num / (1 + num)
+    return np.random.binomial(1, p=prob)
+
+  splits, actions, horizons, stakes = generate_ultimatum_data(real_policy, n=100000)
+  res = maximize_all_likelihoods(splits, actions, horizons, temp=1.)
+  print(res.x, res.success)
+
+
 
 
 

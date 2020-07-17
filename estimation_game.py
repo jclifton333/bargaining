@@ -150,22 +150,28 @@ def coop_bargaining(a1, a2, beta=1, sigma=1, tau=1, p_L=0.5, p_U=1.5, epsilon_1=
     beta_i \iid LogNormal(mu, sigma)
     default iff beta1_tilde/beta2_tilde > tau
   """
+  # ALPHA_1 = 0.05
+  # ALPHA_2 = 0.15
+  # z_1 = norm.ppf(1-ALPHA_1)
+  # z_2 = norm.ppf(1-ALPHA_2)
+  # epsilon_1 = np.exp(-z_1*sigma)
+  # epsilon_2 = np.exp(-z_2*sigma)
+
   mu = np.log(beta) - sigma**2/2
   beta1_hat = np.random.lognormal(mean=mu, sigma=sigma)
   beta2_hat = np.random.lognormal(mean=mu, sigma=sigma)
+  # ToDo: use BR to confidence bound instead?
   beta1_tilde = beta1_hat * np.sqrt(tau) * epsilon_1
   beta2_tilde = beta2_hat / (np.sqrt(tau) * epsilon_2)
   ratio = beta1_tilde / beta2_tilde
   close_enough = (ratio < tau)
   # ToDo: handle comparison to disagreement points?
-  if a1 == 1 and a2 == 1:
-    if close_enough:
-      betaHat = np.sqrt(beta1_tilde * beta2_tilde)
-      xHat = betaHat / 2
-      r1 = beta * xHat
-      r2 = -xHat**2
-    else:
-      r1, r2 = d1, d2
+  play_coop = (a1 == 1 and a1 == 1 and close_enough)
+  if play_coop:
+    betaHat = np.sqrt(beta1_tilde * beta2_tilde)
+    xHat = betaHat / 2
+    r1 = beta * xHat
+    r2 = -xHat**2
   else:
     fair_lower = beta2_hat * np.power(2, -1/p_L)
     fair_upper = beta2_hat * np.power(2, -1/p_U)
@@ -292,7 +298,7 @@ def alternating(a1, a2, u1_mean=None, u2_mean=None, bias_2_1=np.zeros((2, 2)), b
 
 # ToDo: encapsulate environment settings in environments
 def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.,
-           env='coop'):
+           env='coop', epsilon_1=0.5):
   a2 = 1  # Other player always plays collab
   X0 = np.zeros((0, 1))  # Will contain history of sigmas
   X1 = np.zeros((0, 1))
@@ -304,7 +310,7 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.,
   lm0 = RandomForestRegressor(n_estimators=10, max_depth=2, min_samples_split=0.2)
   lm1 = RandomForestRegressor(n_estimators=10, max_depth=2, min_samples_split=0.2)
   close_enough_lst = []
-
+  welfare_lst = []
   for t in range(time_horizon):
     # if np.random.random() < 1.0:
     #   true_u1_mean = np.array([[5, 2], [5, 2]])
@@ -318,7 +324,7 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.,
 
     # Draw context and take action
     bias_2 = np.random.uniform(0.0, 0.0)
-    sigma = np.random.uniform(0.0, 0.4)  # ToDo: pass sigma_upper
+    sigma = np.random.uniform(0.0, 1.0)  # ToDo: pass sigma_upper
 
     if policy in ['cb', 'mab']:
       if t < int(time_horizon/4):  # Choose at random in early stages
@@ -327,23 +333,18 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.,
         a1 = 0
       else:
         if policy == 'cb':
-          lm0.fit(X0, y0)
-          lm1.fit(X1, y1)
+          if t == int(time_horizon/2):
+            lm0.fit(X0, y0)
+            lm1.fit(X1, y1)
           q0 = lm0.predict([[sigma]])
           q1 = lm1.predict([[sigma]])
         elif policy == 'mab':
           q0 = y0.mean()
           q1 = y1.mean()
         if q1 > q0:
-          if np.random.random() < 0.95:
-            a1 = 1
-          else:
-            a1 = 0
+          a1 = 1
         else:
-          if np.random.random() < 0.95:
-            a1 = 0
-          else:
-            a1 = 1
+          a1 = 0
     elif policy=='ind':
       a1 = 0
     elif policy=='coop':
@@ -354,10 +355,10 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.,
     bias_2_2 = np.array([[5, 0], [5, 0]])*bias_2
 
     if env == 'nash':
-      r1, _, close_enough_ = alternating(a1, a2, u1_mean=true_u1_mean, u2_mean=true_u2_mean, bias_2_1=bias_2_1,
+      r1, r2, close_enough_ = alternating(a1, a2, u1_mean=true_u1_mean, u2_mean=true_u2_mean, bias_2_1=bias_2_1,
                                          bias_2_2=bias_2_2, sigma_u=0, sigma_x=sigma, n=n, sigma_tol=sigma_tol)
     elif env == 'coop':
-      r1, _, close_enough_ = coop_bargaining(a1, a2, beta=5, sigma=sigma, tau=sigma_tol)
+      r1, r2, close_enough_ = coop_bargaining(a1, a2, beta=5, sigma=sigma, tau=sigma_tol, epsilon_1=epsilon_1)
 
     # Update history
     if a1:
@@ -368,6 +369,7 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.,
       y0 = np.hstack((y0, r1))
     y = np.hstack((y, r1))
     close_enough_lst.append(close_enough_)
+    welfare_lst.append(r1 + r2)
 
   # lm0.fit(X0, y0)
   # lm1.fit(X1, y1)
@@ -377,14 +379,42 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.,
   # # plt.scatter(X0, y0, label='ind payoffs')
   # plt.plot(xrange_, y0_hat, label='ind')
   # # plt.scatter(X1, y1, label='coop payoffs')
-  # plt.plot(xrange_, y1_hat, label='coop')
+  # plt.plot(xrange_, y1_hat, label='cgs')
   # plt.xlabel('sigma')
   # plt.ylabel('Estimated expected payoff')
-  # plt.title('Decision tree estimates of conditional rewards\nunder each reporting policy')
+  # plt.title('Random forest estimates of conditional rewards\nunder each reporting policy')
   # plt.legend()
   # plt.show()
   # pdb.set_trace()
-  return y[int(time_horizon/2):], close_enough_lst
+  return y[int(time_horizon/2):], close_enough_lst, np.mean(welfare_lst[int(time_horizon/2):])
+
+
+def optimize_mechanism(time_horizon=50, n=5, sigma_upper=1., mc_rep=50):
+  # ToDo: Doesn't really make a difference because reporting policies condition on tau
+
+  for tau in np.logspace(-1, 1, 5):
+    welfare_tau_lst = []
+    for rep in range(mc_rep):
+      _, _, welfare_tau_rep = bandit(policy='cb', time_horizon=time_horizon, n=n, sigma_tol=tau,
+                                                sigma_upper=sigma_upper, env='coop')
+      welfare_tau_lst.append(welfare_tau_rep)
+    welfare_tau_mean = np.mean(welfare_tau_lst)
+    welfare_tau_se = np.std(welfare_tau_lst) / np.sqrt(len(welfare_tau_lst))
+    print(welfare_tau_mean, welfare_tau_se)
+  return
+
+
+def optimize_reporting_policy(time_horizon=50, n=5, sigma_upper=1., sigma_tol=1., mc_rep=5):
+  for epsilon_1 in [2, 5, 10]:
+    rewards_lst = []
+    for rep in range(mc_rep):
+      rewards_rep, _, _ = bandit(policy='cb', time_horizon=time_horizon, n=n, sigma_tol=sigma_tol,
+                                 sigma_upper=sigma_upper, env='coop', epsilon_1=epsilon_1)
+      rewards_lst.append(np.mean(rewards_rep))
+    rewards_mean = np.mean(rewards_lst)
+    rewards_se = np.std(rewards_lst) / np.sqrt(len(rewards_lst))
+    print(rewards_mean, rewards_se)
+  return
 
 
 def compare_policies(plot_name, replicates=10, time_horizon=50, n_private_obs=5, sigma_tol=1, sigma_upper=1.):
@@ -418,34 +448,39 @@ def compare_policies(plot_name, replicates=10, time_horizon=50, n_private_obs=5,
 
   cb_mean, cb_se = data['cb'][:, -1].mean(), data['cb'][:, -1].std() / np.sqrt(replicates)
   mab_mean, mab_se = data['mab'][:, -1].mean(), data['mab'][:, -1].std() / np.sqrt(replicates)
+  ind_mean, ind_se = data['ind'][:, -1].mean(), data['ind'][:, -1].std() / np.sqrt(replicates)
+  coop_mean, coop_se = data['coop'][:, -1].mean(), data['coop'][:, -1].std() / np.sqrt(replicates)
 
-  print('cb: {} mab: {}'.format((cb_mean, cb_se), (mab_mean, mab_se)))
+  print('cb: {}\nmab: {}\nind: {}\ncoop: {}'.format((cb_mean, cb_se), (mab_mean, mab_se),
+                                                    (ind_mean, ind_se), (coop_mean, coop_se)))
 
-  sns.lineplot(x=[i for _ in range(replicates) for i in
-                  range(data['cb'].shape[1])], y=np.hstack(data['cb']),
-              label='cb')
-  sns.lineplot(x=[i for _ in range(replicates) for i in
-                  range(data['mab'].shape[1])], y=np.hstack(data['mab']),
-               label='mab', color='k')
-  sns.lineplot(x=[i for _ in range(replicates) for i in
-                range(data['cb'].shape[1])], y=np.hstack(data['ind']),
-            label='ind')
-  sns.lineplot(x=[i for _ in range(replicates) for i in
-                range(data['cb'].shape[1])], y=np.hstack(data['coop']),
-            label='coop', color='r')
-  plt.legend()
-  plt.title('Tolerance={} Maximum sigma={}'.format(sigma_tol, sigma_upper))
-  plt.xlabel('Time')
-  plt.ylabel('Cumulative reward')
-  if plot_name is not None:
-    plt.savefig('{}.png'.format(plot_name))
-  else:
-    plt.show()
-  return
+  # sns.lineplot(x=[i for _ in range(replicates) for i in
+  #                 range(data['cb'].shape[1])], y=np.hstack(data['cb']),
+  #             label='cb')
+  # sns.lineplot(x=[i for _ in range(replicates) for i in
+  #                 range(data['mab'].shape[1])], y=np.hstack(data['mab']),
+  #              label='mab', color='k')
+  # sns.lineplot(x=[i for _ in range(replicates) for i in
+  #               range(data['cb'].shape[1])], y=np.hstack(data['ind']),
+  #           label='ind')
+  # sns.lineplot(x=[i for _ in range(replicates) for i in
+  #               range(data['cb'].shape[1])], y=np.hstack(data['coop']),
+  #           label='coop', color='r')
+  # plt.legend()
+  # plt.title('Tolerance={} Maximum sigma={}'.format(sigma_tol, sigma_upper))
+  # plt.xlabel('Time')
+  # plt.ylabel('Cumulative reward')
+  # if plot_name is not None:
+  #   plt.savefig('{}.png'.format(plot_name))
+  # else:
+  #   plt.show()
+  # return
 
 
 if __name__ == "__main__":
-  sigma_tol_list = [2]
-  for sigma_tol in sigma_tol_list:
-    compare_policies(None, replicates=100, n_private_obs=2,
-                     time_horizon=300, sigma_tol=sigma_tol, sigma_upper=1)
+  # ToDo: investigate distributional shift by training and testing on disjoint sigma ranges
+  # sigma_tol_list = [2]
+  # for sigma_tol in sigma_tol_list:
+  #   compare_policies(None, replicates=100, n_private_obs=2,
+  #                    time_horizon=300, sigma_tol=sigma_tol, sigma_upper=1)
+  optimize_reporting_policy(mc_rep=100)
