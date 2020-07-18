@@ -10,6 +10,7 @@ from sklearn.tree import DecisionTreeRegressor
 from scipy.stats import norm
 from scipy.special import expit
 import seaborn as sns
+np.set_printoptions(suppress=True)
 
 
 def check_matrix_distances(m11, m12, m21, m22, sigma, sigma_tol):
@@ -298,7 +299,7 @@ def alternating(a1, a2, u1_mean=None, u2_mean=None, bias_2_1=np.zeros((2, 2)), b
 
 # ToDo: encapsulate environment settings in environments
 def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.,
-           env='coop', epsilon_1=0.5):
+           env='coop', epsilon_1=0.5, epsilon_2=1.):
   a2 = 1  # Other player always plays collab
   X0 = np.zeros((0, 1))  # Will contain history of sigmas
   X1 = np.zeros((0, 1))
@@ -325,7 +326,7 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.,
 
     # Draw context and take action
     bias_2 = np.random.uniform(0.0, 0.0)
-    sigma = np.random.uniform(0.0, 1.0)  # ToDo: pass sigma_upper
+    sigma = np.random.uniform(0.0, 5.0)  # ToDo: pass sigma_upper
 
     if policy in ['cb', 'mab']:
       if t < int(time_horizon/4):  # Choose at random in early stages
@@ -359,7 +360,10 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.,
       r1, r2, close_enough_ = alternating(a1, a2, u1_mean=true_u1_mean, u2_mean=true_u2_mean, bias_2_1=bias_2_1,
                                          bias_2_2=bias_2_2, sigma_u=0, sigma_x=sigma, n=n, sigma_tol=sigma_tol)
     elif env == 'coop':
-      r1, r2, close_enough_ = coop_bargaining(a1, a2, beta=5, sigma=sigma, tau=sigma_tol, epsilon_1=epsilon_1)
+      r1, r2, close_enough_ = coop_bargaining(a1, a2, beta=5, sigma=sigma,
+                                              tau=sigma_tol,
+                                              epsilon_1=epsilon_1,
+                                              epsilon_2=epsilon_2)
 
     # Update history
     if a1:
@@ -417,27 +421,30 @@ def optimize_reporting_policy(time_horizon=50, n=5, sigma_upper=1., sigma_tol=1.
       rewards_lst.append(np.mean(rewards_rep))
       close_enough_lst.append(np.mean(close_enough_rep))
     rewards_mean = np.mean(rewards_lst)
-    rewards_se = np.std(rewards_lst) / np.sqrt(len(rewards_lst))
-  return
 
 
-def nash_reporting_policy(time_horizon=50, n=5, sigma_upper=1., mc_rep=100):
+def nash_reporting_policy(time_horizon=100, n=5, sigma_upper=1., mc_rep=100,
+                          nA=10):
   # Compute payoff matrix
-  epsilon_1_space = np.linspace(0.5, 5, 5)
-  epsilon_2_space = np.linspace(0.5, 5, 5)
-  payoffs_1 = np.zeros((5, 5))
-  payoffs_2 = np.zeros((5, 5))
+  epsilon_1_space = np.linspace(0.5, 5, nA)
+  epsilon_2_space = np.linspace(0.5, 5, nA)
+  payoffs_1 = np.zeros((nA, nA))
+  payoffs_2 = np.zeros((nA, nA))
   for i, epsilon_1 in enumerate(epsilon_1_space):
     for j, epsilon_2 in enumerate(epsilon_2_space):
+      print(i, j)
       for rep in range(mc_rep):
         rewards_rep_1, rewards_rep_2, _, _ = \
-          bandit(policy='cb', time_horizon=time_horizon, n=n, sigma_tol=sigma_tol, sigma_upper=sigma_upper,
+          bandit(policy='cb', time_horizon=time_horizon, n=n, sigma_tol=1., sigma_upper=sigma_upper,
                                                     env='coop', epsilon_1=epsilon_1, epsilon_2=epsilon_2)
         payoffs_1[i, j] += np.mean(rewards_rep_1) / mc_rep
         payoffs_2[i, j] += np.mean(rewards_rep_2) / mc_rep
 
-  # ToDo: Compute Nash
-  return
+  # Compute nash
+  e1, e2, _ = get_welfare_optimal_eq(nash.Game(payoffs_1, payoffs_2))
+  v1, v2 = expected_payoffs(payoffs_1, payoffs_2, e1, e2)
+  return {'epsilon_1_space': epsilon_1_space, 'epsilon_2_space':
+          epsilon_2_space, 'e1': e1, 'e2': e2, 'v1': v1, 'v2': v2}
 
 
 
@@ -507,4 +514,6 @@ if __name__ == "__main__":
   # for sigma_tol in sigma_tol_list:
   #   compare_policies(None, replicates=100, n_private_obs=2,
   #                    time_horizon=300, sigma_tol=sigma_tol, sigma_upper=1)
-  optimize_reporting_policy(mc_rep=100)
+  res = nash_reporting_policy(time_horizon=100, n=5, sigma_upper=1., mc_rep=20,
+                              nA=7)
+
