@@ -303,6 +303,7 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.,
   X0 = np.zeros((0, 1))  # Will contain history of sigmas
   X1 = np.zeros((0, 1))
   y = np.zeros(0)
+  y2 = np.zeros(0)
   y0 = np.zeros(0)  # Will contain history of rewards
   y1 = np.zeros(0)
   # lm0 = DecisionTreeRegressor(max_depth=2, min_samples_split=0.2)
@@ -368,6 +369,7 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.,
       X0 = np.vstack((X0, [sigma]))
       y0 = np.hstack((y0, r1))
     y = np.hstack((y, r1))
+    y2 = np.hstack((y2, r2))
     close_enough_lst.append(close_enough_)
     welfare_lst.append(r1 + r2)
 
@@ -386,7 +388,8 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.,
   # plt.legend()
   # plt.show()
   # pdb.set_trace()
-  return y[int(time_horizon/2):], close_enough_lst, np.mean(welfare_lst[int(time_horizon/2):])
+  tail = int(time_horizon/2)
+  return y[tail:], y2[tail:], close_enough_lst, np.mean(welfare_lst[tail:])
 
 
 def optimize_mechanism(time_horizon=50, n=5, sigma_upper=1., mc_rep=50):
@@ -405,16 +408,37 @@ def optimize_mechanism(time_horizon=50, n=5, sigma_upper=1., mc_rep=50):
 
 
 def optimize_reporting_policy(time_horizon=50, n=5, sigma_upper=1., sigma_tol=1., mc_rep=5):
-  for epsilon_1 in [2, 5, 10]:
+  for epsilon_1 in [0.3, 0.5, 1, 2, 5]:
     rewards_lst = []
+    close_enough_lst = []
     for rep in range(mc_rep):
-      rewards_rep, _, _ = bandit(policy='cb', time_horizon=time_horizon, n=n, sigma_tol=sigma_tol,
-                                 sigma_upper=sigma_upper, env='coop', epsilon_1=epsilon_1)
+      rewards_rep, close_enough_rep, _ = bandit(policy='cb', time_horizon=time_horizon, n=n, sigma_tol=sigma_tol,
+                                                sigma_upper=sigma_upper, env='coop', epsilon_1=epsilon_1)
       rewards_lst.append(np.mean(rewards_rep))
+      close_enough_lst.append(np.mean(close_enough_rep))
     rewards_mean = np.mean(rewards_lst)
     rewards_se = np.std(rewards_lst) / np.sqrt(len(rewards_lst))
-    print(rewards_mean, rewards_se)
   return
+
+
+def nash_reporting_policy(time_horizon=50, n=5, sigma_upper=1., mc_rep=100):
+  # Compute payoff matrix
+  epsilon_1_space = np.linspace(0.5, 5, 5)
+  epsilon_2_space = np.linspace(0.5, 5, 5)
+  payoffs_1 = np.zeros((5, 5))
+  payoffs_2 = np.zeros((5, 5))
+  for i, epsilon_1 in enumerate(epsilon_1_space):
+    for j, epsilon_2 in enumerate(epsilon_2_space):
+      for rep in range(mc_rep):
+        rewards_rep_1, rewards_rep_2, _, _ = \
+          bandit(policy='cb', time_horizon=time_horizon, n=n, sigma_tol=sigma_tol, sigma_upper=sigma_upper,
+                                                    env='coop', epsilon_1=epsilon_1, epsilon_2=epsilon_2)
+        payoffs_1[i, j] += np.mean(rewards_rep_1) / mc_rep
+        payoffs_2[i, j] += np.mean(rewards_rep_2) / mc_rep
+
+  # ToDo: Compute Nash
+  return
+
 
 
 def compare_policies(plot_name, replicates=10, time_horizon=50, n_private_obs=5, sigma_tol=1, sigma_upper=1.):
