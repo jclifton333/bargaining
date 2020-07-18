@@ -326,12 +326,12 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.,
 
     # Draw context and take action
     bias_2 = np.random.uniform(0.0, 0.0)
-    sigma = np.random.uniform(0.0, 5.0)  # ToDo: pass sigma_upper
+    sigma = np.random.uniform(0.0, 1.0)  # ToDo: pass sigma_upper
 
     if policy in ['cb', 'mab']:
       if t < int(time_horizon/4):  # Choose at random in early stages
         a1 = 1
-      elif int(time_horizon/5) <= t < int(time_horizon/2):
+      elif int(time_horizon/4) <= t < int(time_horizon/2):
         a1 = 0
       else:
         if policy == 'cb':
@@ -426,8 +426,8 @@ def optimize_reporting_policy(time_horizon=50, n=5, sigma_upper=1., sigma_tol=1.
 def nash_reporting_policy(time_horizon=100, n=5, sigma_upper=1., mc_rep=100,
                           nA=10):
   # Compute payoff matrix
-  epsilon_1_space = np.linspace(0.5, 5, nA)
-  epsilon_2_space = np.linspace(0.5, 5, nA)
+  epsilon_1_space = np.linspace(0.1, 2, nA)
+  epsilon_2_space = np.linspace(0.1, 2, nA)
   payoffs_1 = np.zeros((nA, nA))
   payoffs_2 = np.zeros((nA, nA))
   for i, epsilon_1 in enumerate(epsilon_1_space):
@@ -444,46 +444,39 @@ def nash_reporting_policy(time_horizon=100, n=5, sigma_upper=1., mc_rep=100,
   e1, e2, _ = get_welfare_optimal_eq(nash.Game(payoffs_1, payoffs_2))
   v1, v2 = expected_payoffs(payoffs_1, payoffs_2, e1, e2)
   return {'epsilon_1_space': epsilon_1_space, 'epsilon_2_space':
-          epsilon_2_space, 'e1': e1, 'e2': e2, 'v1': v1, 'v2': v2}
-
+          epsilon_2_space, 'e1': e1, 'e2': e2, 'v1': v1, 'v2': v2, 'payoffs_1': payoffs_1,
+          'payoffs_2': payoffs_2}
 
 
 def compare_policies(plot_name, replicates=10, time_horizon=50, n_private_obs=5, sigma_tol=1, sigma_upper=1.):
   r1_list_cb = []
-  r1_list_mab = []
   r1_list_ind = []
   r1_list_coop = []
   close_list_coop = []
   for _ in range(replicates):
-    r1_list_cb_rep, _ = bandit(policy='cb', n=n_private_obs, time_horizon=time_horizon, sigma_tol=sigma_tol,
+    r1_list_cb_rep, _, _, _ = bandit(policy='cb', n=n_private_obs, time_horizon=time_horizon, sigma_tol=sigma_tol,
                                sigma_upper=sigma_upper)
     r1_list_cb.append(r1_list_cb_rep)
-    r1_list_mab_rep, _ = bandit(policy='mab', n=n_private_obs, time_horizon=time_horizon, sigma_tol=sigma_tol,
-                                sigma_upper=sigma_upper)
-    r1_list_mab.append(r1_list_mab_rep)
-    r1_list_ind_rep, _ = bandit(policy='ind', n=n_private_obs, time_horizon=time_horizon, sigma_tol=sigma_tol,
+    r1_list_ind_rep, _, _, _ = bandit(policy='ind', n=n_private_obs, time_horizon=time_horizon, sigma_tol=sigma_tol,
                                 sigma_upper=sigma_upper)
     r1_list_ind.append(r1_list_ind_rep)
-    r1_list_coop_rep, close_coop = bandit(policy='coop', n=n_private_obs, time_horizon=time_horizon,
+    r1_list_coop_rep, close_coop, _, _ = bandit(policy='coop', n=n_private_obs, time_horizon=time_horizon,
                                           sigma_tol=sigma_tol, sigma_upper=sigma_upper)
     r1_list_coop.append(r1_list_coop_rep)
     close_list_coop.append(np.mean(close_coop))
 
   print('prop close enough coop: {}'.format(np.mean(close_list_coop)))
 
-  data = {'cb': np.cumsum(r1_list_cb, axis=1),
-          'mab': np.cumsum(r1_list_mab, axis=1),
-          'ind': np.cumsum(r1_list_ind, axis=1),
-          'coop': np.cumsum(r1_list_coop, axis=1),
+  data = {'cb': np.mean(r1_list_cb, axis=1),
+          'ind': np.mean(r1_list_ind, axis=1),
+          'coop': np.mean(r1_list_coop, axis=1),
           'timepoint': np.arange(len(r1_list_coop[0]))}
 
-  cb_mean, cb_se = data['cb'][:, -1].mean(), data['cb'][:, -1].std() / np.sqrt(replicates)
-  mab_mean, mab_se = data['mab'][:, -1].mean(), data['mab'][:, -1].std() / np.sqrt(replicates)
-  ind_mean, ind_se = data['ind'][:, -1].mean(), data['ind'][:, -1].std() / np.sqrt(replicates)
-  coop_mean, coop_se = data['coop'][:, -1].mean(), data['coop'][:, -1].std() / np.sqrt(replicates)
+  cb_mean, cb_se = data['cb'].mean(), data['cb'].std() / np.sqrt(replicates)
+  ind_mean, ind_se = data['ind'].mean(), data['ind'].std() / np.sqrt(replicates)
+  coop_mean, coop_se = data['coop'].mean(), data['coop'].std() / np.sqrt(replicates)
 
-  print('cb: {}\nmab: {}\nind: {}\ncoop: {}'.format((cb_mean, cb_se), (mab_mean, mab_se),
-                                                    (ind_mean, ind_se), (coop_mean, coop_se)))
+  print('cb: {}\nind: {}\ncoop: {}'.format((cb_mean, cb_se),(ind_mean, ind_se), (coop_mean, coop_se)))
 
   # sns.lineplot(x=[i for _ in range(replicates) for i in
   #                 range(data['cb'].shape[1])], y=np.hstack(data['cb']),
@@ -514,6 +507,6 @@ if __name__ == "__main__":
   # for sigma_tol in sigma_tol_list:
   #   compare_policies(None, replicates=100, n_private_obs=2,
   #                    time_horizon=300, sigma_tol=sigma_tol, sigma_upper=1)
-  res = nash_reporting_policy(time_horizon=100, n=5, sigma_upper=1., mc_rep=20,
-                              nA=7)
+  res = nash_reporting_policy(time_horizon=300, n=2, sigma_upper=1., mc_rep=100,
+                              nA=6)
 
