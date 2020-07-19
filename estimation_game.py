@@ -138,7 +138,7 @@ def random_nash(sigma_x=1, n=10):
 
 
 def coop_bargaining(a1, a2, beta=1, sigma=1, tau=1, p_L=0.5, p_U=1.5, epsilon_1=0.50, epsilon_2=1.,
-                    d1=0.1, d2=0.1):
+                    d1=0.1, d2=-10):
   """
   epsilon_2 > epsilon_1 by default represents exploitation of player 1 by player 2
 
@@ -171,8 +171,12 @@ def coop_bargaining(a1, a2, beta=1, sigma=1, tau=1, p_L=0.5, p_U=1.5, epsilon_1=
   if play_coop:
     betaHat = np.sqrt(beta1_tilde * beta2_tilde)
     xHat = betaHat / 2
-    r1 = beta * xHat
-    r2 = -xHat**2
+    r1_coop = beta * xHat
+    r2_coop = -xHat**2
+    if r1_coop > d1 and r2_coop > d2:
+      r1, r2 = r1_coop, r2_coop
+    else:
+      r1, r2, = d1, d2
   else:
     fair_lower = beta2_hat * np.power(2, -1/p_L)
     fair_upper = beta2_hat * np.power(2, -1/p_U)
@@ -364,8 +368,8 @@ def learn_conditional_expectation(epsilon_1, epsilon_2, player=1, sigma_tol=2, s
 
 # ToDo: encapsulate environment settings in environments
 def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.,
-           env='coop', epsilon_1=0.5, epsilon_2=1.):
-  y = np.zeros(0)
+           env='coop', epsilon_1=1.0, epsilon_2=1., n_obs_per_strat=1000):
+  y1 = np.zeros(0)
   y2 = np.zeros(0)
   close_enough_lst = []
   welfare_lst = []
@@ -373,10 +377,10 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.,
   if policy == 'cb':
     q0_1, q1_1 = learn_conditional_expectation(epsilon_1, epsilon_2, player=1, sigma_tol=sigma_tol,
                                                sigma_upper=sigma_upper,
-                                               n_obs_per_strat=75)
+                                               n_obs_per_strat=n_obs_per_strat)
     q0_2, q1_2 = learn_conditional_expectation(epsilon_1, epsilon_2, player=2, sigma_tol=sigma_tol,
                                                sigma_upper=sigma_upper,
-                                               n_obs_per_strat=75)
+                                               n_obs_per_strat=n_obs_per_strat)
 
   for t in range(time_horizon):
     # if np.random.random() < 1.0:
@@ -416,12 +420,12 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.,
                                               epsilon_1=epsilon_1,
                                               epsilon_2=epsilon_2)
 
-    y = np.hstack((y, r1))
+    y1 = np.hstack((y1, r1))
     y2 = np.hstack((y2, r2))
     close_enough_lst.append(close_enough_)
     welfare_lst.append(r1 + r2)
 
-  return y, y2, close_enough_lst, np.mean(welfare_lst)
+  return y1, y2, close_enough_lst, np.mean(welfare_lst)
 
 
 def optimize_mechanism(time_horizon=50, n=5, sigma_upper=1., mc_rep=50):
@@ -542,10 +546,10 @@ def compare_policies(plot_name, replicates=10, time_horizon=50, n_private_obs=5,
 
 if __name__ == "__main__":
   # ToDo: investigate distributional shift by training and testing on disjoint sigma ranges
-  sigma_tol_list = [2]
-  for sigma_tol in sigma_tol_list:
-    compare_policies(None, replicates=100, n_private_obs=2,
-                     time_horizon=300, sigma_tol=sigma_tol, sigma_upper=1)
-  # res = nash_reporting_policy(time_horizon=300, n=2, sigma_upper=1., mc_rep=100,
-  #                             nA=6)
+  # sigma_tol_list = [2]
+  # for sigma_tol in sigma_tol_list:
+  #   compare_policies(None, replicates=100, n_private_obs=2,
+  #                    time_horizon=300, sigma_tol=sigma_tol, sigma_upper=1)
+  res = nash_reporting_policy(time_horizon=1000, n=2, sigma_upper=1., mc_rep=1,
+                              nA=6)
 
