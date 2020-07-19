@@ -229,21 +229,6 @@ def run_and_plot_simple_prior_model():
     return np.random.binomial(1, p=prob)
     # return s > 0.4
 
-  # _, actions, _ = generate_ultimatum_data(real_policy, n=100)
-  # fpost1 = conjugate(np.sum(actions), len(actions))
-  # fpost10 = conjugate(np.sum(actions), len(actions), alpha_p=10)
-  # xs = np.linspace(0, 5, 50)
-  # alpha_pairs = [(5, 5), (5, 1.1), (1.1, 5)]
-  # for af, ap in alpha_pairs:
-  #   fpost = conjugate(np.sum(actions), len(actions), alpha_f=af, alpha_p=ap)
-  #   fs = [fpost(np.exp(x)) for x in xs]
-  #   plt.plot(xs, fs, label='alpha={}'.format((af, ap)))
-  # plt.legend()
-  # plt.legend()
-  # plt.show()
-  # pdb.set_trace()
-  # splits, actions, stakes = generate_ultimatum_data(real_policy, n=10000)
-  # tf, tr, comp = model_uncertainty(splits, stakes, actions, sd=0.1, temp=5)
   tb_list = []
   prior_list = []
   sds_list = [1]
@@ -256,8 +241,8 @@ def run_and_plot_simple_prior_model():
   dbns_list = unif_upper_list
   sample_size_list = [1000]
   for gamma_param in gamma_param_list:
-    splits, actions, stakes = \
-      generate_ultimatum_data(real_policy, n=1000)
+    splits, actions, _, stakes = \
+      generate_ultimatum_data(real_policy, n=10)
     tb, prior, model = big_model(splits, stakes, actions, unif_upper=10,
                                  gamma_param=gamma_param)
     tb_list.append(tb)
@@ -348,17 +333,19 @@ if __name__ == "__main__":
   # Maybe fine though as a start, can modify the model / story slightly once we have a working example
 
   # see https://www.sas.upenn.edu/~cb36/files/2010_anem.pdf
-  def real_ev(sp, st):
-    return sp - (sp < 0.4)
+  run_and_plot_simple_prior_model()
 
-  def real_policy(sp, st):
-    num = np.exp(real_ev(sp, st))
-    prob = num / (1 + num)
-    return np.random.binomial(1, p=prob)
+  # def real_ev(sp, st):
+  #   return sp - (sp < 0.4)
 
-  splits, actions, horizons, stakes = generate_ultimatum_data(real_policy, n=100000)
-  res = maximize_all_likelihoods(splits, actions, horizons, temp=1.)
-  print(res.x, res.success)
+  # def real_policy(sp, st):
+  #   num = np.exp(real_ev(sp, st))
+  #   prob = num / (1 + num)
+  #   return np.random.binomial(1, p=prob)
+
+  # splits, actions, horizons, stakes = generate_ultimatum_data(real_policy, n=100000)
+  # res = maximize_all_likelihoods(splits, actions, horizons, temp=1.)
+  # print(res.x, res.success)
 
 
 
