@@ -315,6 +315,7 @@ def learn_conditional_expectation(epsilon_1, epsilon_2, player=1, sigma_tol=2, s
 
   for obs in range(n_obs_per_strat):  # Collect cooperative strategy obs
     sigma = np.random.uniform(low=0., high=sigma_upper)
+    beta = np.random.uniform(low=4., high=6.)
     r1, r2, close_enough_ = coop_bargaining(1, 1, beta=5, sigma=sigma,
                                             tau=sigma_tol,
                                             epsilon_1=epsilon_1,
@@ -332,7 +333,7 @@ def learn_conditional_expectation(epsilon_1, epsilon_2, player=1, sigma_tol=2, s
       a1 = 1
       a2 = 0
 
-    r1, r2, close_enough_ = coop_bargaining(a1, a2, beta=5, sigma=sigma,
+    r1, r2, close_enough_ = coop_bargaining(a1, a2, beta=beta, sigma=sigma,
                                             tau=sigma_tol,
                                             epsilon_1=epsilon_1,
                                             epsilon_2=epsilon_2)
@@ -467,7 +468,7 @@ def nash_reporting_policy(time_horizon=100, n=5, sigma_upper=1., mc_rep=100,
       print(i, j)
       for rep in range(mc_rep):
         rewards_rep_1, rewards_rep_2, _, _ = \
-          bandit(policy='coop', time_horizon=time_horizon, n=n, sigma_tol=1., sigma_upper=sigma_upper,
+          bandit(policy='cb', time_horizon=time_horizon, n=n, sigma_tol=1., sigma_upper=sigma_upper,
                                                     env='coop', epsilon_1=epsilon_1, epsilon_2=epsilon_2)
         payoffs_1[i, j] += np.mean(rewards_rep_1) / mc_rep
         payoffs_2[i, j] += np.mean(rewards_rep_2) / mc_rep
@@ -545,7 +546,8 @@ def compare_policies(plot_name, replicates=10, time_horizon=50, n_private_obs=5,
 
 
 if __name__ == "__main__":
-  # ToDo: investigate distributional shift by training and testing on disjoint sigma ranges
+  # ToDo: Note that \beta's are now being drawn randomly rather than being set to the true value in
+  # ToDo: learning the conditional expectation function, which is not reflected in the draft as of July 19 2020
   # sigma_tol_list = [2]
   # for sigma_tol in sigma_tol_list:
   #   compare_policies(None, replicates=100, n_private_obs=2,

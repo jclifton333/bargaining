@@ -29,14 +29,14 @@ def simple_proposer_posterior_expectation(s, prior, models):
   return u_P_post
 
 
-def random_priors(alpha=1, mc_rep=100):
+def random_priors(alpha=1., mc_rep=100):
   # Proposer is player 1
 
   models = [(0.05, 0.15), (0.15, 0.05)]
   F, I = 0.15, 0.05
-  true_model = [(F, I)]
   srange = np.linspace(0, 1, 20)
-  regret = 0.
+  regret_1 = 0.
+  regret_2 = 0.
   for _ in range(mc_rep):
     prior_1 = np.random.dirichlet(alpha*np.ones(2))
     prior_2 = np.random.dirichlet(alpha*np.ones(2))
@@ -48,12 +48,16 @@ def random_priors(alpha=1, mc_rep=100):
     argmax_1 = srange[np.argmax(u_post_1)]
     argmax_comb = srange[np.argmax(u_post_comb)]
 
-    accept_1 = (u_responder(argmax_1, F) > 0)
-    accept_comb = (u_responder(argmax_comb, F) > 0)
+    u_responder_1 = u_responder(argmax_1, F)
+    u_responder_comb = u_responder(argmax_comb, F)
+    accept_1 = (u_responder_1 > 0)
+    accept_comb = (u_responder_comb > 0)
 
-    regret_rep = accept_comb*(1 - argmax_1) - accept_1*(1 - argmax_comb)
-    regret += regret_rep / mc_rep
-  print(regret)
+    regret_rep_1 = accept_comb*(1 - argmax_comb) - accept_1*(1 - argmax_1)
+    regret_rep_2 = accept_comb*argmax_comb - accept_1*argmax_1
+    regret_1 += regret_rep_1 / mc_rep
+    regret_2 += regret_rep_2 / mc_rep
+  return regret_1, regret_2
 
 
 def plot_payoff_curves():
@@ -88,5 +92,17 @@ def plot_payoff_curves():
 
 
 if __name__ == "__main__":
-  random_priors(alpha=0.1)
+  alpha_lst = np.logspace(-1, 1, 10)
+  regrets_1 = []
+  regrets_2 = []
+  for alpha in alpha_lst:
+    regret_1, regret_2 = random_priors(alpha=alpha, mc_rep=1000)
+    regrets_1.append(regret_1)
+    regrets_2.append(regret_2)
+  plt.plot(alpha_lst, regrets_1, label='Proposer')
+  plt.plot(alpha_lst, regrets_2, label='Responder')
+  plt.xlabel('Dirichlet concentration parameter alpha')
+  plt.ylabel('coop payoff - independent payoff')
+  plt.legend()
+  plt.show()
 
