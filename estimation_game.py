@@ -297,85 +297,51 @@ def alternating(a1, a2, u1_mean=None, u2_mean=None, bias_2_1=np.zeros((2, 2)), b
   return r1, r2, close_enough
 
 
-# ToDo: encapsulate environment settings in environments
-def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.,
-           env='coop', epsilon_1=0.5, epsilon_2=1.):
-  a2 = 1  # Other player always plays collab
+def learn_conditional_expectation(epsilon_1, epsilon_2, player=1, sigma_tol=2, sigma_upper=1., n_obs_per_strat=75):
+  """
+  Estimate expectation of coop and ind strategies given sigma.
+  """
   X0 = np.zeros((0, 1))  # Will contain history of sigmas
   X1 = np.zeros((0, 1))
-  y = np.zeros(0)
-  y2 = np.zeros(0)
-  y0 = np.zeros(0)  # Will contain history of rewards
+  y0 = np.zeros(0)
   y1 = np.zeros(0)
-  # lm0 = DecisionTreeRegressor(max_depth=2, min_samples_split=0.2)
-  # lm1 = DecisionTreeRegressor(max_depth=2, min_samples_split=0.2)
   lm0 = RandomForestRegressor(n_estimators=10, max_depth=2, min_samples_split=0.2)
   lm1 = RandomForestRegressor(n_estimators=10, max_depth=2, min_samples_split=0.2)
-  close_enough_lst = []
-  welfare_lst = []
-  for t in range(time_horizon):
-    # if np.random.random() < 1.0:
-    #   true_u1_mean = np.array([[5, 2], [5, 2]])
-    #   true_u2_mean = np.array([[0, 2], [0, 2]])
-    # else:
-    #   true_u1_mean = np.array([[0, 3], [0, 3]])
-    #   true_u2_mean = np.array([[5, 3], [5, 3]])
+  is_player_1 = (player == 1)
 
-    true_u1_mean = np.array([[-10, 0.5], [-3, -1]])
-    true_u2_mean = np.array([[-10, -3], [0, -1]])
+  for obs in range(n_obs_per_strat):  # Collect cooperative strategy obs
+    sigma = np.random.uniform(low=0., high=sigma_upper)
+    r1, r2, close_enough_ = coop_bargaining(1, 1, beta=5, sigma=sigma,
+                                            tau=sigma_tol,
+                                            epsilon_1=epsilon_1,
+                                            epsilon_2=epsilon_2)
+    X1 = np.vstack((X1, [sigma]))
+    r = r1*is_player_1 + r2*(1 - is_player_1)
+    y1 = np.hstack((y1, r))
 
-    # Draw context and take action
-    bias_2 = np.random.uniform(0.0, 0.0)
-    sigma = np.random.uniform(0.0, 1.0)  # ToDo: pass sigma_upper
-
-    if policy in ['cb', 'mab']:
-      if t < int(time_horizon/4):  # Choose at random in early stages
-        a1 = 1
-      elif int(time_horizon/4) <= t < int(time_horizon/2):
-        a1 = 0
-      else:
-        if policy == 'cb':
-          if t == int(time_horizon/2):
-            lm0.fit(X0, y0)
-            lm1.fit(X1, y1)
-          q0 = lm0.predict([[sigma]])
-          q1 = lm1.predict([[sigma]])
-        elif policy == 'mab':
-          q0 = y0.mean()
-          q1 = y1.mean()
-        if q1 > q0:
-          a1 = 1
-        else:
-          a1 = 0
-    elif policy=='ind':
+  for obs in range(n_obs_per_strat):  # Collect independent strategy obs
+    sigma = np.random.uniform(low=0., high=sigma_upper)
+    if is_player_1:
       a1 = 0
-    elif policy=='coop':
-      a1 = 1
-
-    # Observe reward
-    bias_2_1 = np.array([[-5, 0], [-5, 0]])*bias_2
-    bias_2_2 = np.array([[5, 0], [5, 0]])*bias_2
-
-    if env == 'nash':
-      r1, r2, close_enough_ = alternating(a1, a2, u1_mean=true_u1_mean, u2_mean=true_u2_mean, bias_2_1=bias_2_1,
-                                         bias_2_2=bias_2_2, sigma_u=0, sigma_x=sigma, n=n, sigma_tol=sigma_tol)
-    elif env == 'coop':
-      r1, r2, close_enough_ = coop_bargaining(a1, a2, beta=5, sigma=sigma,
-                                              tau=sigma_tol,
-                                              epsilon_1=epsilon_1,
-                                              epsilon_2=epsilon_2)
-
-    # Update history
-    if a1:
-      X1 = np.vstack((X1, [sigma]))
-      y1 = np.hstack((y1, r1))
+      a2 = 1
     else:
-      X0 = np.vstack((X0, [sigma]))
-      y0 = np.hstack((y0, r1))
-    y = np.hstack((y, r1))
-    y2 = np.hstack((y2, r2))
-    close_enough_lst.append(close_enough_)
-    welfare_lst.append(r1 + r2)
+      a1 = 1
+      a2 = 0
+
+    r1, r2, close_enough_ = coop_bargaining(a1, a2, beta=5, sigma=sigma,
+                                            tau=sigma_tol,
+                                            epsilon_1=epsilon_1,
+                                            epsilon_2=epsilon_2)
+    X0 = np.vstack((X0, [sigma]))
+    r = r1*is_player_1 + r2*(1 - is_player_1)
+    y0 = np.hstack((y0, r))
+
+  # Estimate conditional expectations
+  lm0.fit(X0, y0)
+  lm1.fit(X1, y1)
+
+  q0 = lambda s: lm0.predict([[s]])
+  q1 = lambda s: lm1.predict([[s]])
 
   # lm0.fit(X0, y0)
   # lm1.fit(X1, y1)
@@ -392,8 +358,70 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.,
   # plt.legend()
   # plt.show()
   # pdb.set_trace()
-  tail = int(time_horizon/2)
-  return y[tail:], y2[tail:], close_enough_lst, np.mean(welfare_lst[tail:])
+
+  return q0, q1
+
+
+# ToDo: encapsulate environment settings in environments
+def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.,
+           env='coop', epsilon_1=0.5, epsilon_2=1.):
+  y = np.zeros(0)
+  y2 = np.zeros(0)
+  close_enough_lst = []
+  welfare_lst = []
+
+  if policy == 'cb':
+    q0_1, q1_1 = learn_conditional_expectation(epsilon_1, epsilon_2, player=1, sigma_tol=sigma_tol,
+                                               sigma_upper=sigma_upper,
+                                               n_obs_per_strat=75)
+    q0_2, q1_2 = learn_conditional_expectation(epsilon_1, epsilon_2, player=2, sigma_tol=sigma_tol,
+                                               sigma_upper=sigma_upper,
+                                               n_obs_per_strat=75)
+
+  for t in range(time_horizon):
+    # if np.random.random() < 1.0:
+    #   true_u1_mean = np.array([[5, 2], [5, 2]])
+    #   true_u2_mean = np.array([[0, 2], [0, 2]])
+    # else:
+    #   true_u1_mean = np.array([[0, 3], [0, 3]])
+    #   true_u2_mean = np.array([[5, 3], [5, 3]])
+
+    true_u1_mean = np.array([[-10, 0.5], [-3, -1]])
+    true_u2_mean = np.array([[-10, -3], [0, -1]])
+
+    # Draw context and take action
+    bias_2 = np.random.uniform(0.0, 0.0)
+    sigma = np.random.uniform(0.0, 1.0)  # ToDo: pass sigma_upper
+
+    if policy == 'cb':
+      a1 = q1_1(sigma) > q0_1(sigma)
+      a2 = q1_2(sigma) > q0_2(sigma)
+    elif policy=='ind':
+      a1 = 0
+      a2 = 0
+    elif policy=='coop':
+      a1 = 1
+      a2 = 1
+
+    # Observe reward
+    bias_2_1 = np.array([[-5, 0], [-5, 0]])*bias_2
+    bias_2_2 = np.array([[5, 0], [5, 0]])*bias_2
+
+    if env == 'nash':
+      r1, r2, close_enough_ = alternating(a1, a2, u1_mean=true_u1_mean, u2_mean=true_u2_mean, bias_2_1=bias_2_1,
+                                         bias_2_2=bias_2_2, sigma_u=0, sigma_x=sigma, n=n, sigma_tol=sigma_tol)
+    elif env == 'coop':
+      r1, r2, close_enough_ = coop_bargaining(a1, a2, beta=5, sigma=sigma,
+                                              tau=sigma_tol,
+                                              epsilon_1=epsilon_1,
+                                              epsilon_2=epsilon_2)
+
+    y = np.hstack((y, r1))
+    y2 = np.hstack((y2, r2))
+    close_enough_lst.append(close_enough_)
+    welfare_lst.append(r1 + r2)
+
+  return y, y2, close_enough_lst, np.mean(welfare_lst)
 
 
 def optimize_mechanism(time_horizon=50, n=5, sigma_upper=1., mc_rep=50):
@@ -435,7 +463,7 @@ def nash_reporting_policy(time_horizon=100, n=5, sigma_upper=1., mc_rep=100,
       print(i, j)
       for rep in range(mc_rep):
         rewards_rep_1, rewards_rep_2, _, _ = \
-          bandit(policy='cb', time_horizon=time_horizon, n=n, sigma_tol=1., sigma_upper=sigma_upper,
+          bandit(policy='coop', time_horizon=time_horizon, n=n, sigma_tol=1., sigma_upper=sigma_upper,
                                                     env='coop', epsilon_1=epsilon_1, epsilon_2=epsilon_2)
         payoffs_1[i, j] += np.mean(rewards_rep_1) / mc_rep
         payoffs_2[i, j] += np.mean(rewards_rep_2) / mc_rep
@@ -452,31 +480,42 @@ def compare_policies(plot_name, replicates=10, time_horizon=50, n_private_obs=5,
   r1_list_cb = []
   r1_list_ind = []
   r1_list_coop = []
+  r2_list_cb = []
+  r2_list_ind = []
+  r2_list_coop = []
   close_list_coop = []
   for _ in range(replicates):
-    r1_list_cb_rep, _, _, _ = bandit(policy='cb', n=n_private_obs, time_horizon=time_horizon, sigma_tol=sigma_tol,
+    r1_list_cb_rep, r2_list_cb_rep, _, _ = bandit(policy='cb', n=n_private_obs, time_horizon=time_horizon, sigma_tol=sigma_tol,
                                sigma_upper=sigma_upper)
     r1_list_cb.append(r1_list_cb_rep)
-    r1_list_ind_rep, _, _, _ = bandit(policy='ind', n=n_private_obs, time_horizon=time_horizon, sigma_tol=sigma_tol,
+    r2_list_cb.append(r2_list_cb_rep)
+    r1_list_ind_rep, r2_list_ind_rep, _, _ = bandit(policy='ind', n=n_private_obs, time_horizon=time_horizon, sigma_tol=sigma_tol,
                                 sigma_upper=sigma_upper)
     r1_list_ind.append(r1_list_ind_rep)
-    r1_list_coop_rep, close_coop, _, _ = bandit(policy='coop', n=n_private_obs, time_horizon=time_horizon,
+    r2_list_ind.append(r2_list_ind_rep)
+    r1_list_coop_rep, r2_list_coop_rep, _, _ = bandit(policy='coop', n=n_private_obs, time_horizon=time_horizon,
                                           sigma_tol=sigma_tol, sigma_upper=sigma_upper)
     r1_list_coop.append(r1_list_coop_rep)
-    close_list_coop.append(np.mean(close_coop))
+    r2_list_coop.append(r2_list_coop_rep)
 
-  print('prop close enough coop: {}'.format(np.mean(close_list_coop)))
-
-  data = {'cb': np.mean(r1_list_cb, axis=1),
-          'ind': np.mean(r1_list_ind, axis=1),
-          'coop': np.mean(r1_list_coop, axis=1),
+  data = {'cb1': np.mean(r1_list_cb, axis=1),
+          'ind1': np.mean(r1_list_ind, axis=1),
+          'coop1': np.mean(r1_list_coop, axis=1),
+          'cb2': np.mean(r2_list_cb, axis=1),
+          'ind2': np.mean(r2_list_ind, axis=1),
+          'coop2': np.mean(r2_list_coop, axis=1),
           'timepoint': np.arange(len(r1_list_coop[0]))}
 
-  cb_mean, cb_se = data['cb'].mean(), data['cb'].std() / np.sqrt(replicates)
-  ind_mean, ind_se = data['ind'].mean(), data['ind'].std() / np.sqrt(replicates)
-  coop_mean, coop_se = data['coop'].mean(), data['coop'].std() / np.sqrt(replicates)
+  cb_mean1, cb_se1 = data['cb1'].mean(), data['cb1'].std() / np.sqrt(replicates)
+  ind_mean1, ind_se1 = data['ind1'].mean(), data['ind1'].std() / np.sqrt(replicates)
+  coop_mean1, coop_se1 = data['coop1'].mean(), data['coop1'].std() / np.sqrt(replicates)
+  cb_mean2, cb_se2 = data['cb2'].mean(), data['cb2'].std() / np.sqrt(replicates)
+  ind_mean2, ind_se2 = data['ind2'].mean(), data['ind2'].std() / np.sqrt(replicates)
+  coop_mean2, coop_se2 = data['coop2'].mean(), data['coop2'].std() / np.sqrt(replicates)
 
-  print('cb: {}\nind: {}\ncoop: {}'.format((cb_mean, cb_se),(ind_mean, ind_se), (coop_mean, coop_se)))
+  print('cb1: {}\nind: {}\ncoop: {}'.format((cb_mean1, cb_se1, cb_mean2, cb_se2),
+                                            (ind_mean1, ind_se1, ind_mean2, ind_se2),
+                                            (coop_mean1, coop_se1, coop_mean2, coop_se2)))
 
   # sns.lineplot(x=[i for _ in range(replicates) for i in
   #                 range(data['cb'].shape[1])], y=np.hstack(data['cb']),
@@ -503,10 +542,10 @@ def compare_policies(plot_name, replicates=10, time_horizon=50, n_private_obs=5,
 
 if __name__ == "__main__":
   # ToDo: investigate distributional shift by training and testing on disjoint sigma ranges
-  # sigma_tol_list = [2]
-  # for sigma_tol in sigma_tol_list:
-  #   compare_policies(None, replicates=100, n_private_obs=2,
-  #                    time_horizon=300, sigma_tol=sigma_tol, sigma_upper=1)
-  res = nash_reporting_policy(time_horizon=300, n=2, sigma_upper=1., mc_rep=100,
-                              nA=6)
+  sigma_tol_list = [2]
+  for sigma_tol in sigma_tol_list:
+    compare_policies(None, replicates=100, n_private_obs=2,
+                     time_horizon=300, sigma_tol=sigma_tol, sigma_upper=1)
+  # res = nash_reporting_policy(time_horizon=300, n=2, sigma_upper=1., mc_rep=100,
+  #                             nA=6)
 
