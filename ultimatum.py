@@ -337,6 +337,16 @@ def run_and_plot_simple_prior_model():
 
 if __name__ == "__main__":
   # # TODO: use models from the literature
+  # ToDo: CGS?
+  # 0. Observe trials by receiver
+  # 1. Last stage (no repeated play)
+  # 2. Repeated play parameter is large, such that the receiver will accept most unfair splits
+  # 3. Sender makes decision based on (collaboratively specified?) posterior
+  # Need to modify because the receiver needs to behave strategically based on their beliefs
+  # about the sender's...beleifs about their beliefs (e.g. could commit
+  # or not, but this seems artificial / weird to people not thinking about AI/threats)
+  # Maybe fine though as a start, can modify the model / story slightly once we have a working example
+
   # see https://www.sas.upenn.edu/~cb36/files/2010_anem.pdf
   def real_ev(sp, st):
     return sp - (sp < 0.4)
