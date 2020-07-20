@@ -4,13 +4,14 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.naive_bayes import BernoulliNB
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.feature_selection import RFECV
+from itertools import combinations
 import pymc3 as pm
 import matplotlib.pyplot as plt
 import pdb
 
 
-def compute_strategic_regret(X, y, ind, n_feature_subsets=5):
-  x_test = X.iloc[0, :]
+def compute_strategic_regret(X, y, ind, n_feature_subsets=5, ix=0):
+  x_test = X.iloc[ix, :]
 
   # ToDo: Implement strategic model sharing
 
@@ -19,14 +20,20 @@ def compute_strategic_regret(X, y, ind, n_feature_subsets=5):
   lm_true.fit(X, y)
 
   # Players only observe subset of features
-  ind_1 = np.random.choice(ind, 5)
-  ind_2 = np.random.choice(ind, 5)
+  ind_1 = np.random.choice(ind, 10)
+  ind_2 = np.random.choice(ind, 10)
+  subsets_1 = []
+  subsets_2 = []
+  for i in range(3):
+    subsets_1 += list(combinations(ind_1, i+1))
+  for i in range(3):
+    subsets_2 += list(combinations(ind_2, i+1))
 
   # Player A search
   best_features_1 = None
   best_prob_1 = 0.
   for _ in range(n_feature_subsets):
-    features_1 = np.random.choice(ind_1, 3)
+    features_1 = list(np.random.choice(subsets_1, 1)[0])
     X_1 = X.loc[:, features_1]
     lm_1 = LogisticRegression()
     lm_1.fit(X_1, y)
@@ -39,7 +46,7 @@ def compute_strategic_regret(X, y, ind, n_feature_subsets=5):
   best_features_2 = None
   best_prob_2 = 1.
   for _ in range(n_feature_subsets):
-    features_2 = np.random.choice(ind_2, 3)
+    features_2 = list(np.random.choice(subsets_2, 1)[0])
     X_2 = X.loc[:, features_2]
     lm_2 = LogisticRegression()
     lm_2.fit(X_2, y)
@@ -117,9 +124,13 @@ if __name__ == "__main__":
   X = df.loc[:, ind]
   y = df.loc[:, dep]
 
+
   mc_reps = 20
-  regrets = []
-  for _ in range(mc_reps):
-    regret_1 = compute_strategic_regret(X, y, ind)
-    regrets.append(regret_1)
-  print(np.mean(regrets))
+  regrets_each_ix = []
+  for ix in range(10):
+    regrets = []
+    for _ in range(mc_reps):
+      regret_1 = compute_strategic_regret(X, y, ind, ix=ix)
+      regrets.append(regret_1)
+    regrets_each_ix.append(np.mean(regrets))
+  print(regrets_each_ix)
