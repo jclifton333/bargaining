@@ -2,6 +2,8 @@ import numpy as np
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
 from sklearn.naive_bayes import BernoulliNB
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.feature_selection import RFECV
 import pymc3 as pm
 import matplotlib.pyplot as plt
 
@@ -25,32 +27,31 @@ if __name__ == "__main__":
   dep = ['outcom']
   keep = ind + dep
   df = df.loc[df.sevvio == 4]
-  df = df.loc[df.outcom.isin([1, 4])]
+  df = df.loc[df.outcom.isin([1., 4.])]
   df = df.loc[df.gravty.isin([1, 3, 4, 5, 6])]
-  df.loc[df.outcom == 4, 'outcom'] = 1
-  df.loc[df.outcom == 1, 'outcom'] = 0
   df = df.loc[:, keep]
   df.dropna(axis='rows', inplace=True)
 
   X = df.loc[:, ind]
   y = df.loc[:, dep]
 
-  priors_1 = {'powdis': pm.Normal.dist(mu=0., sigma=1.)}
-  priors_2 = {'powdis': pm.Normal.dist(mu=0., sigma=10.)}
+  # Fit ground truth
+  lm_true = RFECV(LogisticRegression())
+  lm_true.fit(X, y)
 
-  # ToDo: posterior probs of winning
-  with pm.Model() as model:
-    pm.glm.GLM.from_formula('outcom ~ powdis', df, family=pm.glm.families.Binomial(),
-                            priors=priors_1)
-    fitted = pm.fit(method='fullrank_advi')
-    trace_big_1 = fitted.sample(2000)
+  # Fit player 1
+  features_1 = np.random.choice(ind, 4)
+  X_1 = X.loc[:, features_1]
+  lm_1 = LogisticRegression()
+  lm_1.fit(X_1, y)
 
-  with pm.Model() as model:
-    pm.glm.GLM.from_formula('outcom ~ powdis', df, family=pm.glm.families.Binomial(),
-                            priors=priors_2)
-    fitted = pm.fit(method='fullrank_advi')
-    trace_big_2 = fitted.sample(2000)
+  # Fit player 2
+  features_2 = np.random.choice(ind, 4)
+  X_2 = X.loc[:, features_2]
+  lm_2 = LogisticRegression()
+  lm_2.fit(X_2, y)
 
-
-
+  p_true = lm_true.predict_proba(X)[:, 1]
+  p_1 = lm_1.predict_proba(X_1)[:, 1]
+  p_2 = lm_2.predict_proba(X_2)[:, 1]
 
