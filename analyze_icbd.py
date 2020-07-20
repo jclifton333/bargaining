@@ -8,6 +8,9 @@ import pymc3 as pm
 import matplotlib.pyplot as plt
 
 if __name__ == "__main__":
+  tau = 0.05
+  cost = -0.2
+
   df = pd.read_csv('icb2v13.csv')
   drop = ['icb1', 'crisno', 'crisname', ]
 
@@ -35,17 +38,17 @@ if __name__ == "__main__":
   X = df.loc[:, ind]
   y = df.loc[:, dep]
 
-  # Fit ground truth
+  # Fit ground truth (prob of player A winning)
   lm_true = RFECV(LogisticRegression())
   lm_true.fit(X, y)
 
-  # Fit player 1
+  # Fit player A
   features_1 = np.random.choice(ind, 4)
   X_1 = X.loc[:, features_1]
   lm_1 = LogisticRegression()
   lm_1.fit(X_1, y)
 
-  # Fit player 2
+  # Fit player B
   features_2 = np.random.choice(ind, 4)
   X_2 = X.loc[:, features_2]
   lm_2 = LogisticRegression()
@@ -54,4 +57,14 @@ if __name__ == "__main__":
   p_true = lm_true.predict_proba(X)[:, 1]
   p_1 = lm_1.predict_proba(X_1)[:, 1]
   p_2 = lm_2.predict_proba(X_2)[:, 1]
+  p_coop = (p_1 + p_2) / 2
 
+  compromise_ev_1 = p_coop
+  compromise_ev_2 = 1 - p_coop
+
+  war_ev_1 = p_true + cost
+  war_ev_2 = 1 - p_true + cost
+
+  war_regret_1 = compromise_ev_1 - war_ev_1
+  war_regret_2 = compromise_ev_2 - war_ev_2
+  print(war_regret_1, war_regret_2)
