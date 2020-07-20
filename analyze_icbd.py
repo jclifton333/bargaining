@@ -124,13 +124,22 @@ if __name__ == "__main__":
   X = df.loc[:, ind]
   y = df.loc[:, dep]
 
-
-  mc_reps = 20
+  mc_reps = 50
   regrets_each_ix = []
-  for ix in range(10):
+  for ix in range(X.shape[0]):
     regrets = []
     for _ in range(mc_reps):
       regret_1 = compute_strategic_regret(X, y, ind, ix=ix)
       regrets.append(regret_1)
     regrets_each_ix.append(np.mean(regrets))
-  print(regrets_each_ix)
+
+  mean_regret = np.mean(regrets_each_ix)
+  max_regret = np.max(regrets_each_ix)
+  min_regret = np.min(regrets_each_ix)
+  med_regret = np.median(regrets_each_ix)
+
+  plt.hist(regrets_each_ix)
+  plt.xlabel('strategic payoff - exploited payoff')
+  plt.show()
+  print(mean_regret, med_regret, max_regret, min_regret)
+
