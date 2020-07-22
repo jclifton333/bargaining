@@ -29,35 +29,40 @@ def simple_proposer_posterior_expectation(s, prior, models):
   return u_P_post
 
 
-def random_priors(alpha=1., mc_rep=100):
+def meta_ultimatum_game(a1, a2, prior_1, prior_2):
+  # ToDo: assuming truthfully reported priors
+
+  if a1 and a2:
+    combine = True
+  else:
+    combine = False
+
+  u_r, u_p = ultimatum_game(prior_1, prior_2, combine)
+  return u_r, u_p
+
+
+def ultimatum_game(prior_1, prior_2, combine):
   # Proposer is player 1
 
   models = [(0.05, 0.15), (0.15, 0.05)]
   F, I = 0.15, 0.05
   srange = np.linspace(0, 1, 20)
-  regret_1 = 0.
-  regret_2 = 0.
-  for _ in range(mc_rep):
-    prior_1 = np.random.dirichlet(alpha*np.ones(2))
-    prior_2 = np.random.dirichlet(alpha*np.ones(2))
+
+  if combine:
     prior_comb = (prior_1 + prior_2) / 2
-    u_post_1 = np.array([simple_proposer_posterior_expectation(s, prior_1, models) for s in
-                         srange])
     u_post_comb = np.array([simple_proposer_posterior_expectation(s, prior_comb, models) for s in
                             srange])
-    argmax_1 = srange[np.argmax(u_post_1)]
-    argmax_comb = srange[np.argmax(u_post_comb)]
+    offer_ = srange[np.argmax(u_post_comb)]
+  else:
+    u_post_1 = np.array([simple_proposer_posterior_expectation(s, prior_1, models) for s in
+                         srange])
+    offer_ = srange[np.argmax(u_post_1)]
 
-    u_responder_1 = u_responder(argmax_1, F)
-    u_responder_comb = u_responder(argmax_comb, F)
-    accept_1 = (u_responder_1 > 0)
-    accept_comb = (u_responder_comb > 0)
+  u_responder_ = u_responder(offer_, F)
+  accept = (u_responder_ > 0)
+  u_proposer_ = (1 - offer_)*accept
 
-    regret_rep_1 = accept_comb*(1 - argmax_comb) - accept_1*(1 - argmax_1)
-    regret_rep_2 = accept_comb*argmax_comb - accept_1*argmax_1
-    regret_1 += regret_rep_1 / mc_rep
-    regret_2 += regret_rep_2 / mc_rep
-  return regret_1, regret_2
+  return u_proposer_, u_responder_
 
 
 def plot_payoff_curves():

@@ -1,6 +1,7 @@
 import numpy as np
 import nashpy as nash
 from nash_unif import get_welfare_optimal_eq, expected_payoffs
+from simple import meta_ultimatum_game
 import pdb
 import matplotlib.pyplot as plt
 from sklearn.linear_model import Ridge
@@ -395,8 +396,13 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.,
     true_u2_mean = np.array([[-10, -3], [0, -1]])
 
     # Draw context and take action
-    bias_2 = np.random.uniform(0.0, 0.0)
-    sigma = np.random.uniform(0.0, 1.0)  # ToDo: pass sigma_upper
+    sigma = np.random.uniform(0.0, sigma_upper)  # ToDo: pass sigma_upper
+    if env == 'ug':
+      alpha_1_over_alpha_0 = np.random.uniform(0, 1)
+      alpha_1 = sigma*alpha_1_over_alpha_0
+      alpha_2 = sigma - alpha_1
+      prior_1 = np.random.dirichlet(np.array([alpha_1, alpha_2]))
+      prior_2 = np.random.dirichlet(np.array([alpha_1, alpha_2]))
 
     if policy == 'cb':
       a1 = q1_1(sigma) > q0_1(sigma)
@@ -408,10 +414,6 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.,
       a1 = 1
       a2 = 1
 
-    # Observe reward
-    bias_2_1 = np.array([[-5, 0], [-5, 0]])*bias_2
-    bias_2_2 = np.array([[5, 0], [5, 0]])*bias_2
-
     if env == 'nash':
       r1, r2, close_enough_ = alternating(a1, a2, u1_mean=true_u1_mean, u2_mean=true_u2_mean, bias_2_1=bias_2_1,
                                          bias_2_2=bias_2_2, sigma_u=0, sigma_x=sigma, n=n, sigma_tol=sigma_tol)
@@ -420,13 +422,15 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.,
                                               tau=sigma_tol,
                                               epsilon_1=epsilon_1,
                                               epsilon_2=epsilon_2)
+    elif env == 'ug':
+      r1, r2 = meta_ultimatum_game(a1, a2, prior_1, prior_2)
 
     y1 = np.hstack((y1, r1))
     y2 = np.hstack((y2, r2))
-    close_enough_lst.append(close_enough_)
+    # close_enough_lst.append(close_enough_)
     welfare_lst.append(r1 + r2)
 
-  return y1, y2, close_enough_lst, np.mean(welfare_lst)
+  return y1, y2, [], np.mean(welfare_lst)
 
 
 def optimize_mechanism(time_horizon=50, n=5, sigma_upper=1., mc_rep=50):
@@ -481,7 +485,7 @@ def nash_reporting_policy(time_horizon=100, n=5, sigma_upper=1., mc_rep=100,
           'payoffs_2': payoffs_2}
 
 
-def compare_policies(plot_name, replicates=10, time_horizon=50, n_private_obs=5, sigma_tol=1, sigma_upper=1.):
+def compare_policies(plot_name, env='coop', replicates=10, time_horizon=50, n_private_obs=5, sigma_tol=1, sigma_upper=1.):
   r1_list_cb = []
   r1_list_ind = []
   r1_list_coop = []
@@ -491,15 +495,15 @@ def compare_policies(plot_name, replicates=10, time_horizon=50, n_private_obs=5,
   close_list_coop = []
   for _ in range(replicates):
     r1_list_cb_rep, r2_list_cb_rep, _, _ = bandit(policy='cb', n=n_private_obs, time_horizon=time_horizon, sigma_tol=sigma_tol,
-                               sigma_upper=sigma_upper)
+                               env=env, sigma_upper=sigma_upper)
     r1_list_cb.append(r1_list_cb_rep)
     r2_list_cb.append(r2_list_cb_rep)
     r1_list_ind_rep, r2_list_ind_rep, _, _ = bandit(policy='ind', n=n_private_obs, time_horizon=time_horizon, sigma_tol=sigma_tol,
-                                sigma_upper=sigma_upper)
+                                env=env, sigma_upper=sigma_upper)
     r1_list_ind.append(r1_list_ind_rep)
     r2_list_ind.append(r2_list_ind_rep)
     r1_list_coop_rep, r2_list_coop_rep, _, _ = bandit(policy='coop', n=n_private_obs, time_horizon=time_horizon,
-                                          sigma_tol=sigma_tol, sigma_upper=sigma_upper)
+                                          env=env, sigma_tol=sigma_tol, sigma_upper=sigma_upper)
     r1_list_coop.append(r1_list_coop_rep)
     r2_list_coop.append(r2_list_coop_rep)
 
@@ -548,10 +552,10 @@ def compare_policies(plot_name, replicates=10, time_horizon=50, n_private_obs=5,
 if __name__ == "__main__":
   # ToDo: Note that \beta's are now being drawn randomly rather than being set to the true value in
   # ToDo: learning the conditional expectation function, which is not reflected in the draft as of July 19 2020
-  # sigma_tol_list = [2]
-  # for sigma_tol in sigma_tol_list:
-  #   compare_policies(None, replicates=100, n_private_obs=2,
-  #                    time_horizon=300, sigma_tol=sigma_tol, sigma_upper=1)
-  res = nash_reporting_policy(time_horizon=1000, n=2, sigma_upper=1., mc_rep=1,
-                              nA=6)
+  sigma_tol_list = [2]
+  for sigma_tol in sigma_tol_list:
+    compare_policies(None, env='ug', replicates=1, n_private_obs=2,
+                     time_horizon=1000, sigma_tol=sigma_tol, sigma_upper=1)
+  # res = nash_reporting_policy(time_horizon=1000, n=2, sigma_upper=1., mc_rep=1,
+  #                             nA=6)
 
