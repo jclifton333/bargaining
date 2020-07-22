@@ -8,6 +8,7 @@ from sklearn.linear_model import Ridge
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.kernel_ridge import KernelRidge
 from sklearn.tree import DecisionTreeRegressor
+from sklearn.linear_model import LinearRegression, Ridge
 from scipy.stats import norm
 from scipy.special import expit
 import seaborn as sns
@@ -302,7 +303,7 @@ def alternating(a1, a2, u1_mean=None, u2_mean=None, bias_2_1=np.zeros((2, 2)), b
   return r1, r2, close_enough
 
 
-def learn_conditional_expectation(epsilon_1, epsilon_2, player=1, sigma_tol=2, sigma_upper=1., n_obs_per_strat=75):
+def learn_conditional_expectation(epsilon_1, epsilon_2, env='coop', player=1, sigma_tol=2, sigma_upper=1., n_obs_per_strat=75):
   """
   Estimate expectation of coop and ind strategies given sigma.
   """
@@ -310,23 +311,33 @@ def learn_conditional_expectation(epsilon_1, epsilon_2, player=1, sigma_tol=2, s
   X1 = np.zeros((0, 1))
   y0 = np.zeros(0)
   y1 = np.zeros(0)
-  lm0 = RandomForestRegressor(n_estimators=10, max_depth=2, min_samples_split=0.2)
-  lm1 = RandomForestRegressor(n_estimators=10, max_depth=2, min_samples_split=0.2)
+  # lm0 = RandomForestRegressor(n_estimators=10, max_depth=2, min_samples_split=0.2)
+  # lm1 = RandomForestRegressor(n_estimators=10, max_depth=2, min_samples_split=0.2)
+  lm0 = Ridge()
+  lm1 = Ridge()
   is_player_1 = (player == 1)
 
   for obs in range(n_obs_per_strat):  # Collect cooperative strategy obs
     sigma = np.random.uniform(low=0., high=sigma_upper)
-    beta = np.random.uniform(low=4., high=6.)
-    r1, r2, close_enough_ = coop_bargaining(1, 1, beta=5, sigma=sigma,
-                                            tau=sigma_tol,
-                                            epsilon_1=epsilon_1,
-                                            epsilon_2=epsilon_2)
+    if env == 'coop':
+      beta = np.random.uniform(low=4., high=6.)
+      r1, r2, close_enough_ = coop_bargaining(1, 1, beta=5, sigma=sigma,
+                                              tau=sigma_tol,
+                                              epsilon_1=epsilon_1,
+                                              epsilon_2=epsilon_2)
+    elif env == 'ug':
+      alpha_1_over_alpha_0 = np.random.uniform(0, 1)
+      alpha_1 = sigma*alpha_1_over_alpha_0
+      alpha_2 = sigma - alpha_1
+      prior_1 = np.random.dirichlet(np.array([alpha_1, alpha_2]))
+      prior_2 = np.random.dirichlet(np.array([alpha_1, alpha_2]))
+      r1, r2 = meta_ultimatum_game(1, 1, prior_1, prior_2)
+
     X1 = np.vstack((X1, [sigma]))
     r = r1*is_player_1 + r2*(1 - is_player_1)
     y1 = np.hstack((y1, r))
 
   for obs in range(n_obs_per_strat):  # Collect independent strategy obs
-    sigma = np.random.uniform(low=0., high=sigma_upper)
     if is_player_1:
       a1 = 0
       a2 = 1
@@ -334,10 +345,21 @@ def learn_conditional_expectation(epsilon_1, epsilon_2, player=1, sigma_tol=2, s
       a1 = 1
       a2 = 0
 
-    r1, r2, close_enough_ = coop_bargaining(a1, a2, beta=beta, sigma=sigma,
+    sigma = np.random.uniform(low=0., high=sigma_upper)
+    if env == 'coop':
+      beta = np.random.uniform(low=4., high=6.)
+      r1, r2, close_enough_ = coop_bargaining(a1, a2, beta=beta, sigma=sigma,
                                             tau=sigma_tol,
                                             epsilon_1=epsilon_1,
                                             epsilon_2=epsilon_2)
+    elif env == 'ug':
+      alpha_1_over_alpha_0 = np.random.uniform(0, 1)
+      alpha_1 = sigma*alpha_1_over_alpha_0
+      alpha_2 = sigma - alpha_1
+      prior_1 = np.random.dirichlet(np.array([alpha_1, alpha_2]))
+      prior_2 = np.random.dirichlet(np.array([alpha_1, alpha_2]))
+      r1, r2 = meta_ultimatum_game(a1, a2, prior_1, prior_2)
+
     X0 = np.vstack((X0, [sigma]))
     r = r1*is_player_1 + r2*(1 - is_player_1)
     y0 = np.hstack((y0, r))
@@ -370,7 +392,7 @@ def learn_conditional_expectation(epsilon_1, epsilon_2, player=1, sigma_tol=2, s
 
 # ToDo: encapsulate environment settings in environments
 def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.,
-           env='coop', epsilon_1=1.0, epsilon_2=1., n_obs_per_strat=1000):
+           env='coop', epsilon_1=1.0, epsilon_2=1., n_obs_per_strat=2000):
   y1 = np.zeros(0)
   y2 = np.zeros(0)
   close_enough_lst = []
@@ -378,10 +400,11 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.,
 
   if policy == 'cb':
     q0_1, q1_1 = learn_conditional_expectation(epsilon_1, epsilon_2, player=1, sigma_tol=sigma_tol,
-                                               sigma_upper=sigma_upper,
-                                               n_obs_per_strat=n_obs_per_strat)
+                                               sigma_upper=10.,
+                                               n_obs_per_strat=n_obs_per_strat,
+                                               env=env)
     q0_2, q1_2 = learn_conditional_expectation(epsilon_1, epsilon_2, player=2, sigma_tol=sigma_tol,
-                                               sigma_upper=sigma_upper,
+                                               sigma_upper=10., env=env,
                                                n_obs_per_strat=n_obs_per_strat)
 
   for t in range(time_horizon):
@@ -396,7 +419,7 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.,
     true_u2_mean = np.array([[-10, -3], [0, -1]])
 
     # Draw context and take action
-    sigma = np.random.uniform(0.0, sigma_upper)  # ToDo: pass sigma_upper
+    sigma = np.random.uniform(0.0, 10.0)  # ToDo: pass sigma_upper
     if env == 'ug':
       alpha_1_over_alpha_0 = np.random.uniform(0, 1)
       alpha_1 = sigma*alpha_1_over_alpha_0

@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from sklearn.linear_model import LinearRegression
 from ultimatum import generate_ultimatum_data
 import pdb
 
@@ -29,13 +30,21 @@ def simple_proposer_posterior_expectation(s, prior, models):
   return u_P_post
 
 
-def meta_ultimatum_game(a1, a2, prior_1, prior_2):
+def meta_ultimatum_game(a1, a2, prior_1, prior_2, eps_1=0.05, eps_2=0.2, tau=0.3):
   # ToDo: assuming truthfully reported priors
 
-  if a1 and a2:
+  if a1 and a2 and np.abs(prior_1[0] - prior_2[0]) < tau:
     combine = True
   else:
     combine = False
+
+  prior_1_distort = tau - eps_1
+  prior_1[0] = np.min((prior_1[0] + prior_1_distort, 1.))
+  prior_1[1] = 1 - prior_1[0]
+
+  prior_2_distort = tau - eps_2
+  prior_2[0] = np.max((prior_2[0] - prior_2_distort, 0.))
+  prior_2[1] = 1 - prior_2[0]
 
   u_r, u_p = ultimatum_game(prior_1, prior_2, combine)
   return u_r, u_p
