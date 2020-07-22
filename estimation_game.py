@@ -331,7 +331,8 @@ def learn_conditional_expectation(epsilon_1, epsilon_2, env='coop', player=1, si
       alpha_2 = sigma - alpha_1
       prior_1 = np.random.dirichlet(np.array([alpha_1, alpha_2]))
       prior_2 = np.random.dirichlet(np.array([alpha_1, alpha_2]))
-      r1, r2 = meta_ultimatum_game(1, 1, prior_1, prior_2)
+      r1, r2 = meta_ultimatum_game(1, 1, prior_1, prior_2, eps_1=epsilon_1,
+                                  eps_2=epsilon_2)
 
     X1 = np.vstack((X1, [sigma]))
     r = r1*is_player_1 + r2*(1 - is_player_1)
@@ -358,7 +359,8 @@ def learn_conditional_expectation(epsilon_1, epsilon_2, env='coop', player=1, si
       alpha_2 = sigma - alpha_1
       prior_1 = np.random.dirichlet(np.array([alpha_1, alpha_2]))
       prior_2 = np.random.dirichlet(np.array([alpha_1, alpha_2]))
-      r1, r2 = meta_ultimatum_game(a1, a2, prior_1, prior_2)
+      r1, r2 = meta_ultimatum_game(a1, a2, prior_1, prior_2, eps_1=epsilon_1,
+                                   eps_2=epsilon_2)
 
     X0 = np.vstack((X0, [sigma]))
     r = r1*is_player_1 + r2*(1 - is_player_1)
@@ -392,7 +394,7 @@ def learn_conditional_expectation(epsilon_1, epsilon_2, env='coop', player=1, si
 
 # ToDo: encapsulate environment settings in environments
 def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.,
-           env='coop', epsilon_1=1.0, epsilon_2=1., n_obs_per_strat=2000):
+           env='coop', epsilon_1=1.0, epsilon_2=1., n_obs_per_strat=500):
   y1 = np.zeros(0)
   y2 = np.zeros(0)
   close_enough_lst = []
@@ -446,7 +448,8 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.,
                                               epsilon_1=epsilon_1,
                                               epsilon_2=epsilon_2)
     elif env == 'ug':
-      r1, r2 = meta_ultimatum_game(a1, a2, prior_1, prior_2)
+      r1, r2 = meta_ultimatum_game(a1, a2, prior_1, prior_2, eps_1=epsilon_1,
+                                   eps_2=epsilon_2)
 
     y1 = np.hstack((y1, r1))
     y2 = np.hstack((y2, r2))
@@ -483,11 +486,15 @@ def optimize_reporting_policy(time_horizon=50, n=5, sigma_upper=1., sigma_tol=1.
     rewards_mean = np.mean(rewards_lst)
 
 
-def nash_reporting_policy(time_horizon=100, n=5, sigma_upper=1., mc_rep=100,
+def nash_reporting_policy(env='coop', time_horizon=100, n=5, sigma_upper=1., mc_rep=100,
                           nA=10):
   # Compute payoff matrix
-  epsilon_1_space = np.linspace(0.1, 2, nA)
-  epsilon_2_space = np.linspace(0.1, 2, nA)
+  if env=='coop':
+    epsilon_1_space = np.linspace(0.1, 2, nA)
+    epsilon_2_space = np.linspace(0.1, 2, nA)
+  elif env=='ug':
+    epsilon_1_space = np.linspace(0, 0.3, nA)
+    epsilon_2_space = np.linspace(0, 0.3, nA)
   payoffs_1 = np.zeros((nA, nA))
   payoffs_2 = np.zeros((nA, nA))
   for i, epsilon_1 in enumerate(epsilon_1_space):
@@ -496,7 +503,7 @@ def nash_reporting_policy(time_horizon=100, n=5, sigma_upper=1., mc_rep=100,
       for rep in range(mc_rep):
         rewards_rep_1, rewards_rep_2, _, _ = \
           bandit(policy='cb', time_horizon=time_horizon, n=n, sigma_tol=1., sigma_upper=sigma_upper,
-                                                    env='coop', epsilon_1=epsilon_1, epsilon_2=epsilon_2)
+                                                    env=env, epsilon_1=epsilon_1, epsilon_2=epsilon_2)
         payoffs_1[i, j] += np.mean(rewards_rep_1) / mc_rep
         payoffs_2[i, j] += np.mean(rewards_rep_2) / mc_rep
 
@@ -575,10 +582,10 @@ def compare_policies(plot_name, env='coop', replicates=10, time_horizon=50, n_pr
 if __name__ == "__main__":
   # ToDo: Note that \beta's are now being drawn randomly rather than being set to the true value in
   # ToDo: learning the conditional expectation function, which is not reflected in the draft as of July 19 2020
-  sigma_tol_list = [2]
-  for sigma_tol in sigma_tol_list:
-    compare_policies(None, env='ug', replicates=1, n_private_obs=2,
-                     time_horizon=1000, sigma_tol=sigma_tol, sigma_upper=1)
-  # res = nash_reporting_policy(time_horizon=1000, n=2, sigma_upper=1., mc_rep=1,
-  #                             nA=6)
+  # sigma_tol_list = [2]
+  # for sigma_tol in sigma_tol_list:
+  #   compare_policies(None, env='ug', replicates=1, n_private_obs=2,
+  #                    time_horizon=1000, sigma_tol=sigma_tol, sigma_upper=1)
+  res = nash_reporting_policy(env='ug', time_horizon=1000, n=2, sigma_upper=1., mc_rep=1,
+                              nA=6)
 

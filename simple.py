@@ -38,11 +38,11 @@ def meta_ultimatum_game(a1, a2, prior_1, prior_2, eps_1=0.05, eps_2=0.2, tau=0.3
     combine = False
 
   prior_1_distort = tau - eps_1
-  prior_1[0] = np.min((prior_1[0] + prior_1_distort, 1.))
+  prior_1[0] = np.max((prior_1[0] + prior_1_distort, 0.))
   prior_1[1] = 1 - prior_1[0]
 
-  prior_2_distort = tau - eps_2
-  prior_2[0] = np.max((prior_2[0] - prior_2_distort, 0.))
+  prior_2_distort = tau + eps_2
+  prior_2[0] = np.min((prior_2[0] - prior_2_distort, 1.))
   prior_2[1] = 1 - prior_2[0]
 
   u_r, u_p = ultimatum_game(prior_1, prior_2, combine)
