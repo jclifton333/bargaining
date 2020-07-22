@@ -32,20 +32,22 @@ def simple_proposer_posterior_expectation(s, prior, models):
 def meta_ultimatum_game(a1, a2, prior_1, prior_2, eps_1=0.05, eps_2=0.2, tau=0.3):
   # ToDo: assuming truthfully reported priors
 
-  if a1 and a2 and np.abs(prior_1[0] - prior_2[0]) < tau:
-    combine = True
+  prior_1_reported = np.zeros(2)
+  prior_2_reported = np.zeros(2)
+
+  prior_1_distort = tau + eps_1
+  prior_1_reported[0] = np.min((prior_1[0] + prior_1_distort, 1.))
+  prior_1_reported[1] = 1 - prior_1_reported[0]
+
+  prior_2_distort = tau - eps_2
+  prior_2_reported[0] = np.max((prior_2[0] + prior_2_distort, 0.))
+  prior_2_reported[1] = 1 - prior_2_reported[0]
+
+  if a1 and a2 and np.abs(prior_1_reported[0] - prior_2_reported[0]) < tau:
+    u_r, u_p = ultimatum_game(prior_1_reported, prior_2_reported, True)
   else:
-    combine = False
+    u_r, u_p = ultimatum_game(prior_1, prior_2, False)
 
-  prior_1_distort = tau - eps_1
-  prior_1[0] = np.max((prior_1[0] + prior_1_distort, 0.))
-  prior_1[1] = 1 - prior_1[0]
-
-  prior_2_distort = tau + eps_2
-  prior_2[0] = np.min((prior_2[0] - prior_2_distort, 1.))
-  prior_2[1] = 1 - prior_2[0]
-
-  u_r, u_p = ultimatum_game(prior_1, prior_2, combine)
   return u_r, u_p
 
 
