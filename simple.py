@@ -35,11 +35,11 @@ def meta_ultimatum_game(a1, a2, prior_1, prior_2, eps_1=0.05, eps_2=0.2, tau=0.3
   prior_1_reported = np.zeros(2)
   prior_2_reported = np.zeros(2)
 
-  prior_1_distort = tau + eps_1
-  prior_1_reported[0] = np.min((prior_1[0] + prior_1_distort, 1.))
+  prior_1_distort = tau - eps_1
+  prior_1_reported[0] = np.min((prior_1[0] - prior_1_distort, 1.))
   prior_1_reported[1] = 1 - prior_1_reported[0]
 
-  prior_2_distort = tau - eps_2
+  prior_2_distort = eps_2 - tau
   prior_2_reported[0] = np.max((prior_2[0] + prior_2_distort, 0.))
   prior_2_reported[1] = 1 - prior_2_reported[0]
 
@@ -55,7 +55,7 @@ def ultimatum_game(prior_1, prior_2, combine):
   # Proposer is player 1
 
   models = [(0.05, 0.15), (0.15, 0.05)]
-  F, I = 0.15, 0.05
+  F, I = 0.05, 0.15
   srange = np.linspace(0, 1, 20)
 
   if combine:
@@ -85,6 +85,7 @@ def plot_payoff_curves():
   prior_2 = (0.5, 0.5)
   priors = [prior_1, prior_2]
   true_model = [(0.15, 0.05)]
+  # true_model = [(0.05, 0.15)]
   # true_model = [(0.2, 0.00)]
 
   srange = np.linspace(0, 1, 20)

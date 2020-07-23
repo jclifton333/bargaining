@@ -495,17 +495,27 @@ def nash_reporting_policy(env='coop', time_horizon=100, n=5, sigma_upper=1., mc_
   elif env=='ug':
     epsilon_1_space = np.linspace(0, 0.3, nA)
     epsilon_2_space = np.linspace(0, 0.3, nA)
-  payoffs_1 = np.zeros((nA, nA))
-  payoffs_2 = np.zeros((nA, nA))
+  payoffs_1 = np.zeros((nA+1, nA+1))
+  payoffs_2 = np.zeros((nA+1, nA+1))
   for i, epsilon_1 in enumerate(epsilon_1_space):
     for j, epsilon_2 in enumerate(epsilon_2_space):
       print(i, j)
       for rep in range(mc_rep):
         rewards_rep_1, rewards_rep_2, _, _ = \
-          bandit(policy='cb', time_horizon=time_horizon, n=n, sigma_tol=1., sigma_upper=sigma_upper,
+          bandit(policy='coop', time_horizon=time_horizon, n=n, sigma_tol=1., sigma_upper=sigma_upper,
                                                     env=env, epsilon_1=epsilon_1, epsilon_2=epsilon_2)
         payoffs_1[i, j] += np.mean(rewards_rep_1) / mc_rep
         payoffs_2[i, j] += np.mean(rewards_rep_2) / mc_rep
+
+  # Get independent payoffs
+  for rep in range(mc_rep):
+    rewards_rep_1, rewards_rep_2, _, _ = \
+      bandit(policy='ind', time_horizon=time_horizon, n=n, sigma_tol=1., sigma_upper=sigma_upper,
+             env=env, epsilon_1=epsilon_1, epsilon_2=epsilon_2)
+    payoffs_1[nA, :] += np.mean(rewards_rep_1) / mc_rep
+    payoffs_1[:-1, nA] += np.mean(rewards_rep_1) / mc_rep
+    payoffs_2[nA, :] += np.mean(rewards_rep_2) / mc_rep
+    payoffs_2[:-1, nA] += np.mean(rewards_rep_2) / mc_rep
 
   # Compute nash
   e1, e2, _ = get_welfare_optimal_eq(nash.Game(payoffs_1, payoffs_2))
@@ -585,7 +595,9 @@ if __name__ == "__main__":
   # sigma_tol_list = [2]
   # for sigma_tol in sigma_tol_list:
   #   compare_policies(None, env='ug', replicates=1, n_private_obs=2,
-  #                    time_horizon=1000, sigma_tol=sigma_tol, sigma_upper=1)
-  res = nash_reporting_policy(env='ug', time_horizon=1000, n=2, sigma_upper=1., mc_rep=1,
+  #                    time_horizon=10000, sigma_tol=sigma_tol, sigma_upper=1)
+  res = nash_reporting_policy(env='ug', time_horizon=10000, n=2, sigma_upper=1., mc_rep=1,
                               nA=6)
+  print(res['payoffs_1'].round(2))
+  print(res['payoffs_2'].round(2))
 
