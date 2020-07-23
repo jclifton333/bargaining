@@ -55,7 +55,7 @@ def ultimatum_game(prior_1, prior_2, combine):
   # Proposer is player 1
 
   models = [(0.05, 0.15), (0.15, 0.05)]
-  F, I = 0.05, 0.15
+  F, I = 0.15, 0.05
   srange = np.linspace(0, 1, 20)
 
   if combine:
