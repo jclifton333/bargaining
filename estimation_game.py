@@ -402,11 +402,11 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.,
 
   if policy == 'cb':
     q0_1, q1_1 = learn_conditional_expectation(epsilon_1, epsilon_2, player=1, sigma_tol=sigma_tol,
-                                               sigma_upper=10.,
+                                               sigma_upper=sigma_upper,
                                                n_obs_per_strat=n_obs_per_strat,
                                                env=env)
     q0_2, q1_2 = learn_conditional_expectation(epsilon_1, epsilon_2, player=2, sigma_tol=sigma_tol,
-                                               sigma_upper=10., env=env,
+                                               sigma_upper=sigma_upper, env=env,
                                                n_obs_per_strat=n_obs_per_strat)
 
   for t in range(time_horizon):
@@ -421,7 +421,7 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.,
     true_u2_mean = np.array([[-10, -3], [0, -1]])
 
     # Draw context and take action
-    sigma = np.random.uniform(0.0, 10.0)  # ToDo: pass sigma_upper
+    sigma = np.random.uniform(0.0, sigma_upper)  # ToDo: pass sigma_upper
     if env == 'ug':
       alpha_1_over_alpha_0 = np.random.uniform(0, 1)
       alpha_1 = sigma*alpha_1_over_alpha_0
@@ -486,15 +486,17 @@ def optimize_reporting_policy(time_horizon=50, n=5, sigma_upper=1., sigma_tol=1.
     rewards_mean = np.mean(rewards_lst)
 
 
-def nash_reporting_policy(env='coop', time_horizon=100, n=5, sigma_upper=1., mc_rep=100,
+def nash_reporting_policy(env='coop', time_horizon=100, n=5, mc_rep=100,
                           nA=10):
   # Compute payoff matrix
   if env=='coop':
     epsilon_1_space = np.linspace(0.1, 2, nA)
     epsilon_2_space = np.linspace(0.1, 2, nA)
+    sigma_upper = 2.
   elif env=='ug':
     epsilon_1_space = np.linspace(0, 0.3, nA)
     epsilon_2_space = np.linspace(0, 0.3, nA)
+    sigma_upper = 10.
   payoffs_1 = np.zeros((nA+1, nA+1))
   payoffs_2 = np.zeros((nA+1, nA+1))
   standard_errors_1 = np.zeros((nA+1, nA+1))
@@ -506,14 +508,14 @@ def nash_reporting_policy(env='coop', time_horizon=100, n=5, sigma_upper=1., mc_
       se_ij_2 = []
       for rep in range(mc_rep):
         rewards_rep_1, rewards_rep_2, _, _ = \
-          bandit(policy='cb', time_horizon=time_horizon, n=n, sigma_tol=1., sigma_upper=sigma_upper,
+          bandit(policy='coop', time_horizon=time_horizon, n=n, sigma_tol=1., sigma_upper=sigma_upper,
                                                     env=env, epsilon_1=epsilon_1, epsilon_2=epsilon_2)
         payoffs_1[i, j] += np.mean(rewards_rep_1) / mc_rep
         payoffs_2[i, j] += np.mean(rewards_rep_2) / mc_rep
-        se_ij_1.append(rewards_rep_1)
-        se_ij_2.append(rewards_rep_2)
-      standard_errors_1[i, j] = np.std(se_ij_1) / np.sqrt(mc_rep)
-      standard_errors_2[i, j] = np.std(se_ij_2) / np.sqrt(mc_rep)
+        se_ij_1 += list(rewards_rep_1)
+        se_ij_2 += list(rewards_rep_2)
+      standard_errors_1[i, j] = np.std(se_ij_1) / np.sqrt(len(se_ij_1))
+      standard_errors_2[i, j] = np.std(se_ij_2) / np.sqrt(len(se_ij_2))
 
   # Get independent payoffs
   se_1 = []
@@ -526,13 +528,13 @@ def nash_reporting_policy(env='coop', time_horizon=100, n=5, sigma_upper=1., mc_
     payoffs_1[:-1, nA] += np.mean(rewards_rep_1) / mc_rep
     payoffs_2[nA, :] += np.mean(rewards_rep_2) / mc_rep
     payoffs_2[:-1, nA] += np.mean(rewards_rep_2) / mc_rep
-    se_1.append(rewards_rep_1)
-    se_2.append(rewards_rep_2)
+    se_1 += list(rewards_rep_1)
+    se_2 += list(rewards_rep_2)
 
-  standard_errors_1[nA, :] = np.std(se_1) / np.sqrt(mc_rep)
-  standard_errors_1[:-1, nA] = np.std(se_1) / np.sqrt(mc_rep)
-  standard_errors_2[nA, :] = np.std(se_2) / np.sqrt(mc_rep)
-  standard_errors_2[:-1, nA] = np.std(se_2) / np.sqrt(mc_rep)
+  standard_errors_1[nA, :] = np.std(se_1) / np.sqrt(len(rewards_rep_1))
+  standard_errors_1[:-1, nA] = np.std(se_1) / np.sqrt(len(rewards_rep_1))
+  standard_errors_2[nA, :] = np.std(se_2) / np.sqrt(len(rewards_rep_2))
+  standard_errors_2[:-1, nA] = np.std(se_2) / np.sqrt(len(rewards_rep_2))
 
   # Compute nash
   e1, e2, _ = get_welfare_optimal_eq(nash.Game(payoffs_1, payoffs_2))
@@ -615,8 +617,11 @@ if __name__ == "__main__":
   # for sigma_tol in sigma_tol_list:
   #   compare_policies(None, env='ug', replicates=1, n_private_obs=2,
   #                    time_horizon=10000, sigma_tol=sigma_tol, sigma_upper=1)
-  res = nash_reporting_policy(env='ug', time_horizon=1000, n=2, sigma_upper=1., mc_rep=1,
-                              nA=6)
+  res = nash_reporting_policy(env='ug', time_horizon=1000, n=2, mc_rep=1,
+                              nA=3)
   print(res['payoffs_1'].round(2))
   print(res['payoffs_2'].round(2))
+  print(res['v1'], res['se_1'])
+  print(res['v2'], res['se_2'])
+
 

@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from ultimatum import generate_ultimatum_data
 import pdb
+from functools import partial
 
 
 def u_responder(s, f):
@@ -55,7 +56,7 @@ def ultimatum_game(prior_1, prior_2, combine):
   # Proposer is player 1
 
   models = [(0.05, 0.15), (0.15, 0.05)]
-  F, I = 0.15, 0.05
+  F, I = 0.05, 0.15
   srange = np.linspace(0, 1, 20)
 
   if combine:
@@ -108,17 +109,46 @@ def plot_payoff_curves():
 
 
 if __name__ == "__main__":
-  alpha_lst = np.logspace(-1, 1, 10)
-  regrets_1 = []
-  regrets_2 = []
-  for alpha in alpha_lst:
-    regret_1, regret_2 = random_priors(alpha=alpha, mc_rep=1000)
-    regrets_1.append(regret_1)
-    regrets_2.append(regret_2)
-  plt.plot(alpha_lst, regrets_1, label='Proposer')
-  plt.plot(alpha_lst, regrets_2, label='Responder')
-  plt.xlabel('Dirichlet concentration parameter alpha')
-  plt.ylabel('coop payoff - independent payoff')
-  plt.legend()
-  plt.show()
+  # alpha_lst = np.logspace(-1, 1, 10)
+  # regrets_1 = []
+  # regrets_2 = []
+  # for alpha in alpha_lst:
+  #   regret_1, regret_2 = random_priors(alpha=alpha, mc_rep=1000)
+  #   regrets_1.append(regret_1)
+  #   regrets_2.append(regret_2)
+  # plt.plot(alpha_lst, regrets_1, label='Proposer')
+  # plt.plot(alpha_lst, regrets_2, label='Responder')
+  # plt.xlabel('Dirichlet concentration parameter alpha')
+  # plt.ylabel('coop payoff - independent payoff')
+  # plt.legend()
+  # plt.show()
+
+  def simple_horizon(sp, st, h, F, I):
+   u = sp - (F + h*I) * (sp < 0.4)
+   exp_ = np.exp(u)
+   prob = exp_ / (1 + exp_)
+   accept = np.random.binomial(1, p=prob)
+   lik = accept*prob + (1-accept)*(1-prob)
+   return accept, lik
+
+  n = 10
+  P_F = 0.5
+  P_I = 0.5
+  F, I = 0.05, 0.15
+  simple_horizon_I = partial(simple_horizon, F=0.05, I=0.15/n)
+  simple_horizon_F = partial(simple_horizon, F=0.15, I=0.05/n)
+
+  splits_I, actions_I, horizons_I, stakes_I, liks_I = generate_ultimatum_data(simple_horizon_I, n)
+  lik_I = np.prod(liks_I)
+  lik_F = 1.
+  for s, a, h in zip(splits_I, actions_I, horizons_I):
+    exp_a = np.exp(s - (F + (n-h)*I)*(s < 0.4))
+    p_a = exp_a / (1 + exp_a)
+    lik_F *= p_a*a + (1-p_a)*(1-a)
+
+  post_I = P_I * lik_I / (P_I * lik_I + P_F * lik_F)
+  print(post_I)
+
+
+
 

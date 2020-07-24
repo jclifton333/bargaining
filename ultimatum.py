@@ -17,9 +17,14 @@ def generate_ultimatum_data(policy, n=100):
   """
   splits = np.random.uniform(size=n)
   stakes = np.ones(n)
-  actions = [policy(sp, st) for sp, st in zip(splits, stakes)]
-  horizons = np.random.poisson(5, size=n)
-  return splits, actions, horizons, stakes
+  horizons = np.arange(n)
+  actions = []
+  likelihoods = []
+  for sp, st, h in zip(splits, stakes, horizons):
+    a, lik = policy(sp, st, n-h)
+    actions.append(a)
+    likelihoods.append(lik)
+  return splits, actions, horizons, stakes, likelihoods
 
 
 def simple_boltzmann_ll(r, splits, actions, temp=1.):
