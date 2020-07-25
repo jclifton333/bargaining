@@ -488,25 +488,29 @@ def optimize_reporting_policy(time_horizon=50, n=5, sigma_upper=1., sigma_tol=1.
 
 
 def nash_reporting_policy(env='coop', time_horizon=100, n=5, mc_rep=100,
-                          nA=10, tau=1., eps_upper=1.):
+                          nA=10, tau=1., eps_upper=1., policy='coop'):
   # Compute payoff matrix
   if env=='coop':
-    epsilon_1_space = np.linspace(0.1, 2, nA)
-    epsilon_2_space = np.linspace(0.1, 2, nA)
+    epsilon_1_space = np.linspace(0.1, eps_upper, nA)
+    epsilon_2_space = np.linspace(0.1, eps_upper, nA)
     sigma_upper = 2.
   elif env=='ug':
     epsilon_1_space = np.linspace(0, eps_upper, nA)
     epsilon_2_space = np.linspace(0, eps_upper, nA)
     sigma_upper = 10.
 
-  nA = nA**2
+  if policy == 'cb':
+    nA = nA ** 2
+    epsilon_1_prod = [(eps1, eps2) for eps1 in epsilon_1_space for eps2 in epsilon_2_space]
+    epsilon_2_prod = [(eps2, eps1) for eps2 in epsilon_2_space for eps1 in epsilon_1_space]
+  else:
+    epsilon_1_prod = [(eps1, eps1) for eps1 in epsilon_1_space]
+    epsilon_2_prod = [(eps2, eps2) for eps2 in epsilon_2_space]
+
   payoffs_1 = np.zeros((nA+1, nA+1))
   payoffs_2 = np.zeros((nA+1, nA+1))
   standard_errors_1 = np.zeros((nA+1, nA+1))
   standard_errors_2 = np.zeros((nA+1, nA+1))
-
-  epsilon_1_prod = [(eps1, eps2) for eps1 in epsilon_1_space for eps2 in epsilon_2_space]
-  epsilon_2_prod = [(eps2, eps1) for eps2 in epsilon_2_space for eps1 in epsilon_1_space]
 
   for i, (epsilon_1, epsilon_21) in enumerate(epsilon_1_prod):
     for j, (epsilon_2, epsilon_12) in enumerate(epsilon_2_prod):
@@ -515,7 +519,7 @@ def nash_reporting_policy(env='coop', time_horizon=100, n=5, mc_rep=100,
       print(i, j)
       for rep in range(mc_rep):
         rewards_rep_1, rewards_rep_2, _, _ = \
-          bandit(policy='cb', time_horizon=time_horizon, n=n, sigma_tol=tau, sigma_upper=sigma_upper,
+          bandit(policy=policy, time_horizon=time_horizon, n=n, sigma_tol=tau, sigma_upper=sigma_upper,
                 env=env, epsilon_1=epsilon_1, epsilon_2=epsilon_2, epsilon_12=epsilon_12, epsilon_21=epsilon_21)
         payoffs_1[i, j] += np.mean(rewards_rep_1) / mc_rep
         payoffs_2[i, j] += np.mean(rewards_rep_2) / mc_rep
@@ -550,8 +554,8 @@ def nash_reporting_policy(env='coop', time_horizon=100, n=5, mc_rep=100,
   payoffs_1 = payoffs_1.round(2)
   payoffs_2 = payoffs_2.round(2)
   d1, d2 = payoffs_1[nA, nA], payoffs_2[nA, nA]
-  e1, e2, _ = get_nash_welfare_optimal_eq(nash.Game(payoffs_1, payoffs_2), d1, d2)
-  # e1, e2, _ = get_welfare_optimal_eq(nash.Game(payoffs_1, payoffs_2))
+  # e1, e2, _ = get_nash_welfare_optimal_eq(nash.Game(payoffs_1, payoffs_2), d1, d2)
+  e1, e2, _ = get_welfare_optimal_eq(nash.Game(payoffs_1, payoffs_2))
   se_1 = np.sqrt(np.dot(e1, np.dot(standard_errors_1**2, e2)))  # ToDo: check se calculation
   se_2 = np.sqrt(np.dot(e1, np.dot(standard_errors_2**2, e2)))
   v1, v2 = expected_payoffs(payoffs_1, payoffs_2, e1, e2)
@@ -631,8 +635,8 @@ if __name__ == "__main__":
   # for sigma_tol in sigma_tol_list:
   #   compare_policies(None, env='ug', replicates=1, n_private_obs=2,
   #                    time_horizon=10000, sigma_tol=sigma_tol, sigma_upper=1)
-  res = nash_reporting_policy(env='ug', time_horizon=1000, n=2, mc_rep=1,
-                              nA=2, tau=0.5, eps_upper=0.5)
+  res = nash_reporting_policy(env='coop', policy='coop', time_horizon=1000, n=2, mc_rep=1,
+                              nA=3, tau=2.0, eps_upper=2.0)
   print(res['payoffs_1'].round(2))
   print(res['payoffs_2'].round(2))
   print(res['v1'], res['se_1'])

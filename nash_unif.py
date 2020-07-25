@@ -21,7 +21,6 @@ def get_nash_welfare_optimal_eq(game_res, d1, d2):
   best_welfare = -float('inf')
   best_v1 = -float('inf')
   best_eq = None
-  pdb.set_trace()
   for eq in game_res.support_enumeration():
     v1, v2 = game_res[eq]
     if v1 >= d1 and v2 >= d2:
