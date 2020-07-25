@@ -30,7 +30,7 @@ def simple_proposer_posterior_expectation(s, prior, models):
   return u_P_post
 
 
-def meta_ultimatum_game(a1, a2, prior_1, prior_2, eps_1=0.05, eps_2=0.2, tau=0.3):
+def meta_ultimatum_game(a1, a2, prior_1, prior_2, eps_1=0.05, eps_2=0.2, tau=1.0):
   # ToDo: assuming truthfully reported priors
 
   prior_1_reported = np.zeros(2)
@@ -131,12 +131,12 @@ if __name__ == "__main__":
    lik = accept*prob + (1-accept)*(1-prob)
    return accept, lik
 
-  n = 10
-  P_F = 0.5
-  P_I = 0.5
-  F, I = 0.05, 0.15
-  simple_horizon_I = partial(simple_horizon, F=0.05, I=0.15/n)
-  simple_horizon_F = partial(simple_horizon, F=0.15, I=0.05/n)
+  n = 20
+  P_F = 0.8
+  P_I = 0.2
+  F, I = 0.15, 0.05
+  simple_horizon_I = partial(simple_horizon, F=0.05, I=0.15)
+  simple_horizon_F = partial(simple_horizon, F=0.15, I=0.05)
 
   splits_I, actions_I, horizons_I, stakes_I, liks_I = generate_ultimatum_data(simple_horizon_I, n)
   lik_I = np.prod(liks_I)

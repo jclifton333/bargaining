@@ -1,7 +1,8 @@
 import numpy as np
 import nashpy as nash
-from nash_unif import get_welfare_optimal_eq, expected_payoffs
+from nash_unif import get_welfare_optimal_eq, expected_payoffs, get_nash_welfare_optimal_eq
 from simple import meta_ultimatum_game
+from itertools import product
 import pdb
 import matplotlib.pyplot as plt
 from sklearn.linear_model import Ridge
@@ -311,10 +312,10 @@ def learn_conditional_expectation(epsilon_1, epsilon_2, env='coop', player=1, si
   X1 = np.zeros((0, 1))
   y0 = np.zeros(0)
   y1 = np.zeros(0)
-  # lm0 = RandomForestRegressor(n_estimators=10, max_depth=2, min_samples_split=0.2)
-  # lm1 = RandomForestRegressor(n_estimators=10, max_depth=2, min_samples_split=0.2)
-  lm0 = Ridge()
-  lm1 = Ridge()
+  lm0 = RandomForestRegressor(n_estimators=10, max_depth=2, min_samples_split=0.2)
+  lm1 = RandomForestRegressor(n_estimators=10, max_depth=2, min_samples_split=0.2)
+  # lm0 = Ridge()
+  # lm1 = Ridge()
   is_player_1 = (player == 1)
 
   for obs in range(n_obs_per_strat):  # Collect cooperative strategy obs
@@ -332,7 +333,7 @@ def learn_conditional_expectation(epsilon_1, epsilon_2, env='coop', player=1, si
       prior_1 = np.random.dirichlet(np.array([alpha_1, alpha_2]))
       prior_2 = np.random.dirichlet(np.array([alpha_1, alpha_2]))
       r1, r2 = meta_ultimatum_game(1, 1, prior_1, prior_2, eps_1=epsilon_1,
-                                  eps_2=epsilon_2)
+                                  eps_2=epsilon_2, tau=sigma_tol)
 
     X1 = np.vstack((X1, [sigma]))
     r = r1*is_player_1 + r2*(1 - is_player_1)
@@ -350,9 +351,9 @@ def learn_conditional_expectation(epsilon_1, epsilon_2, env='coop', player=1, si
     if env == 'coop':
       beta = np.random.uniform(low=4., high=6.)
       r1, r2, close_enough_ = coop_bargaining(a1, a2, beta=beta, sigma=sigma,
-                                            tau=sigma_tol,
-                                            epsilon_1=epsilon_1,
-                                            epsilon_2=epsilon_2)
+                                              tau=sigma_tol,
+                                              epsilon_1=epsilon_1,
+                                              epsilon_2=epsilon_2)
     elif env == 'ug':
       alpha_1_over_alpha_0 = np.random.uniform(0, 1)
       alpha_1 = sigma*alpha_1_over_alpha_0
@@ -360,7 +361,7 @@ def learn_conditional_expectation(epsilon_1, epsilon_2, env='coop', player=1, si
       prior_1 = np.random.dirichlet(np.array([alpha_1, alpha_2]))
       prior_2 = np.random.dirichlet(np.array([alpha_1, alpha_2]))
       r1, r2 = meta_ultimatum_game(a1, a2, prior_1, prior_2, eps_1=epsilon_1,
-                                   eps_2=epsilon_2)
+                                   eps_2=epsilon_2, tau=sigma_tol)
 
     X0 = np.vstack((X0, [sigma]))
     r = r1*is_player_1 + r2*(1 - is_player_1)
@@ -394,18 +395,18 @@ def learn_conditional_expectation(epsilon_1, epsilon_2, env='coop', player=1, si
 
 # ToDo: encapsulate environment settings in environments
 def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.,
-           env='coop', epsilon_1=1.0, epsilon_2=1., n_obs_per_strat=500):
+           env='coop', epsilon_1=1.0, epsilon_2=1., epsilon_21=1., epsilon_12=1., n_obs_per_strat=500):
   y1 = np.zeros(0)
   y2 = np.zeros(0)
   close_enough_lst = []
   welfare_lst = []
 
   if policy == 'cb':
-    q0_1, q1_1 = learn_conditional_expectation(epsilon_1, epsilon_2, player=1, sigma_tol=sigma_tol,
+    q0_1, q1_1 = learn_conditional_expectation(epsilon_1, epsilon_21, player=1, sigma_tol=sigma_tol,
                                                sigma_upper=sigma_upper,
                                                n_obs_per_strat=n_obs_per_strat,
                                                env=env)
-    q0_2, q1_2 = learn_conditional_expectation(epsilon_1, epsilon_2, player=2, sigma_tol=sigma_tol,
+    q0_2, q1_2 = learn_conditional_expectation(epsilon_12, epsilon_2, player=2, sigma_tol=sigma_tol,
                                                sigma_upper=sigma_upper, env=env,
                                                n_obs_per_strat=n_obs_per_strat)
 
@@ -421,7 +422,7 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.,
     true_u2_mean = np.array([[-10, -3], [0, -1]])
 
     # Draw context and take action
-    sigma = np.random.uniform(0.0, sigma_upper)  # ToDo: pass sigma_upper
+    sigma = np.random.uniform(0.0, sigma_upper)
     if env == 'ug':
       alpha_1_over_alpha_0 = np.random.uniform(0, 1)
       alpha_1 = sigma*alpha_1_over_alpha_0
@@ -449,7 +450,7 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.,
                                               epsilon_2=epsilon_2)
     elif env == 'ug':
       r1, r2 = meta_ultimatum_game(a1, a2, prior_1, prior_2, eps_1=epsilon_1,
-                                   eps_2=epsilon_2)
+                                   eps_2=epsilon_2, tau=sigma_tol)
 
     y1 = np.hstack((y1, r1))
     y2 = np.hstack((y2, r2))
@@ -487,29 +488,35 @@ def optimize_reporting_policy(time_horizon=50, n=5, sigma_upper=1., sigma_tol=1.
 
 
 def nash_reporting_policy(env='coop', time_horizon=100, n=5, mc_rep=100,
-                          nA=10):
+                          nA=10, tau=1., eps_upper=1.):
   # Compute payoff matrix
   if env=='coop':
     epsilon_1_space = np.linspace(0.1, 2, nA)
     epsilon_2_space = np.linspace(0.1, 2, nA)
     sigma_upper = 2.
   elif env=='ug':
-    epsilon_1_space = np.linspace(0, 0.3, nA)
-    epsilon_2_space = np.linspace(0, 0.3, nA)
+    epsilon_1_space = np.linspace(0, eps_upper, nA)
+    epsilon_2_space = np.linspace(0, eps_upper, nA)
     sigma_upper = 10.
+
+  nA = nA**2
   payoffs_1 = np.zeros((nA+1, nA+1))
   payoffs_2 = np.zeros((nA+1, nA+1))
   standard_errors_1 = np.zeros((nA+1, nA+1))
   standard_errors_2 = np.zeros((nA+1, nA+1))
-  for i, epsilon_1 in enumerate(epsilon_1_space):
-    for j, epsilon_2 in enumerate(epsilon_2_space):
-      print(i, j)
+
+  epsilon_1_prod = [(eps1, eps2) for eps1 in epsilon_1_space for eps2 in epsilon_2_space]
+  epsilon_2_prod = [(eps2, eps1) for eps2 in epsilon_2_space for eps1 in epsilon_1_space]
+
+  for i, (epsilon_1, epsilon_21) in enumerate(epsilon_1_prod):
+    for j, (epsilon_2, epsilon_12) in enumerate(epsilon_2_prod):
       se_ij_1 = []
       se_ij_2 = []
+      print(i, j)
       for rep in range(mc_rep):
         rewards_rep_1, rewards_rep_2, _, _ = \
-          bandit(policy='coop', time_horizon=time_horizon, n=n, sigma_tol=1., sigma_upper=sigma_upper,
-                                                    env=env, epsilon_1=epsilon_1, epsilon_2=epsilon_2)
+          bandit(policy='cb', time_horizon=time_horizon, n=n, sigma_tol=tau, sigma_upper=sigma_upper,
+                env=env, epsilon_1=epsilon_1, epsilon_2=epsilon_2, epsilon_12=epsilon_12, epsilon_21=epsilon_21)
         payoffs_1[i, j] += np.mean(rewards_rep_1) / mc_rep
         payoffs_2[i, j] += np.mean(rewards_rep_2) / mc_rep
         se_ij_1 += list(rewards_rep_1)
@@ -522,7 +529,7 @@ def nash_reporting_policy(env='coop', time_horizon=100, n=5, mc_rep=100,
   se_2 = []
   for rep in range(mc_rep):
     rewards_rep_1, rewards_rep_2, _, _ = \
-      bandit(policy='ind', time_horizon=time_horizon, n=n, sigma_tol=1., sigma_upper=sigma_upper,
+      bandit(policy='ind', time_horizon=time_horizon, n=n, sigma_tol=tau, sigma_upper=sigma_upper,
              env=env, epsilon_1=epsilon_1, epsilon_2=epsilon_2)
     payoffs_1[nA, :] += np.mean(rewards_rep_1) / mc_rep
     payoffs_1[:-1, nA] += np.mean(rewards_rep_1) / mc_rep
@@ -536,8 +543,15 @@ def nash_reporting_policy(env='coop', time_horizon=100, n=5, mc_rep=100,
   standard_errors_2[nA, :] = np.std(se_2) / np.sqrt(len(rewards_rep_2))
   standard_errors_2[:-1, nA] = np.std(se_2) / np.sqrt(len(rewards_rep_2))
 
+  print(standard_errors_1)
+  print(standard_errors_2)
+
   # Compute nash
-  e1, e2, _ = get_welfare_optimal_eq(nash.Game(payoffs_1, payoffs_2))
+  payoffs_1 = payoffs_1.round(2)
+  payoffs_2 = payoffs_2.round(2)
+  d1, d2 = payoffs_1[nA, nA], payoffs_2[nA, nA]
+  e1, e2, _ = get_nash_welfare_optimal_eq(nash.Game(payoffs_1, payoffs_2), d1, d2)
+  # e1, e2, _ = get_welfare_optimal_eq(nash.Game(payoffs_1, payoffs_2))
   se_1 = np.sqrt(np.dot(e1, np.dot(standard_errors_1**2, e2)))  # ToDo: check se calculation
   se_2 = np.sqrt(np.dot(e1, np.dot(standard_errors_2**2, e2)))
   v1, v2 = expected_payoffs(payoffs_1, payoffs_2, e1, e2)
@@ -618,7 +632,7 @@ if __name__ == "__main__":
   #   compare_policies(None, env='ug', replicates=1, n_private_obs=2,
   #                    time_horizon=10000, sigma_tol=sigma_tol, sigma_upper=1)
   res = nash_reporting_policy(env='ug', time_horizon=1000, n=2, mc_rep=1,
-                              nA=3)
+                              nA=2, tau=0.5, eps_upper=0.5)
   print(res['payoffs_1'].round(2))
   print(res['payoffs_2'].round(2))
   print(res['v1'], res['se_1'])
