@@ -460,14 +460,24 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.,
   return y1, y2, [], np.mean(welfare_lst)
 
 
-def optimize_mechanism(time_horizon=50, n=5, sigma_upper=1., mc_rep=50):
-  # ToDo: Doesn't really make a difference because reporting policies condition on tau
+def optimize_mechanism(policy='coop', env='coop', time_horizon=1000, n=5, mc_rep=10):
+  if env == 'coop':
+    epsilon_1 = 1.
+    epsilon_2 = 1.
+    tau_range = np.logspace(-1, 1, 5)
+    sigma_upper = 1.
+  elif env == 'ug':
+    epsilon_1 = 0.2
+    epsilon_2 = 0.2
+    tau_range = np.linspace(0.1, 1, 5)
+    sigma_upper = 1.
 
-  for tau in np.logspace(-1, 1, 5):
+  for tau in tau_range:
     welfare_tau_lst = []
     for rep in range(mc_rep):
-      _, _, welfare_tau_rep = bandit(policy='cb', time_horizon=time_horizon, n=n, sigma_tol=tau,
-                                                sigma_upper=sigma_upper, env='coop')
+      _, _, _, welfare_tau_rep = bandit(policy=policy, time_horizon=time_horizon, n=n, sigma_tol=tau,
+                                        sigma_upper=sigma_upper, env=env, epsilon_1=epsilon_1,
+                                        epsilon_12=epsilon_1, epsilon_2=epsilon_2, epsilon_21=epsilon_2)
       welfare_tau_lst.append(welfare_tau_rep)
     welfare_tau_mean = np.mean(welfare_tau_lst)
     welfare_tau_se = np.std(welfare_tau_lst) / np.sqrt(len(welfare_tau_lst))
@@ -635,11 +645,11 @@ if __name__ == "__main__":
   # for sigma_tol in sigma_tol_list:
   #   compare_policies(None, env='ug', replicates=1, n_private_obs=2,
   #                    time_horizon=10000, sigma_tol=sigma_tol, sigma_upper=1)
-  res = nash_reporting_policy(env='coop', policy='coop', time_horizon=1000, n=2, mc_rep=1,
-                              nA=3, tau=2.0, eps_upper=2.0)
-  print(res['payoffs_1'].round(2))
-  print(res['payoffs_2'].round(2))
-  print(res['v1'], res['se_1'])
-  print(res['v2'], res['se_2'])
+  # res = nash_reporting_policy(env='ug', policy='cb', time_horizon=1000, n=2, mc_rep=1,
+  #                             nA=4, tau=0.3, eps_upper=0.3)
+  # print(res['payoffs_1'].round(2))
+  # print(res['payoffs_2'].round(2))
+  # print(res['v1'], res['se_1'])
+  # print(res['v2'], res['se_2'])
 
-
+  optimize_mechanism(policy='coop', env='ug', time_horizon=1000, n=5, mc_rep=1)
