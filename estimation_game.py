@@ -467,9 +467,9 @@ def optimize_mechanism(policy='coop', env='coop', time_horizon=1000, n=5, mc_rep
     tau_range = np.logspace(-1, 1, 5)
     sigma_upper = 1.
   elif env == 'ug':
-    epsilon_1 = 0.2
-    epsilon_2 = 0.2
-    tau_range = np.linspace(0.1, 1, 5)
+    epsilon_1 = 0.5
+    epsilon_2 = 0.1
+    tau_range = np.linspace(0.1, 2, 5)
     sigma_upper = 1.
 
   for tau in tau_range:
@@ -482,6 +482,21 @@ def optimize_mechanism(policy='coop', env='coop', time_horizon=1000, n=5, mc_rep
     welfare_tau_mean = np.mean(welfare_tau_lst)
     welfare_tau_se = np.std(welfare_tau_lst) / np.sqrt(len(welfare_tau_lst))
     print(welfare_tau_mean, welfare_tau_se)
+  return
+
+
+def optimize_mechanism_nash(env='coop', time_horizon=100, n=5, mc_rep=100, nA=10, eps_upper=1., policy='coop'):
+  if env == 'coop':
+    tau_range = np.logspace(-1, 1, 5)
+  elif env == 'ug':
+    tau_range = np.linspace(0.1, 2, 5)
+
+  for tau in tau_range:
+    res = nash_reporting_policy(env=env, time_horizon=time_horizon, n=n, mc_rep=mc_rep, nA=nA, tau=tau,
+                                eps_upper=eps_upper, policy=policy)
+    v1, v2 = res['v1'], res['v2']
+    welfare = v1 + v2
+    print(welfare)
   return
 
 
@@ -526,7 +541,7 @@ def nash_reporting_policy(env='coop', time_horizon=100, n=5, mc_rep=100,
     for j, (epsilon_2, epsilon_12) in enumerate(epsilon_2_prod):
       se_ij_1 = []
       se_ij_2 = []
-      print(i, j)
+      # print(i, j)
       for rep in range(mc_rep):
         rewards_rep_1, rewards_rep_2, _, _ = \
           bandit(policy=policy, time_horizon=time_horizon, n=n, sigma_tol=tau, sigma_upper=sigma_upper,
@@ -557,8 +572,8 @@ def nash_reporting_policy(env='coop', time_horizon=100, n=5, mc_rep=100,
   standard_errors_2[nA, :] = np.std(se_2) / np.sqrt(len(rewards_rep_2))
   standard_errors_2[:-1, nA] = np.std(se_2) / np.sqrt(len(rewards_rep_2))
 
-  print(standard_errors_1)
-  print(standard_errors_2)
+  # print(standard_errors_1)
+  # print(standard_errors_2)
 
   # Compute nash
   payoffs_1 = payoffs_1.round(2)
@@ -652,4 +667,4 @@ if __name__ == "__main__":
   # print(res['v1'], res['se_1'])
   # print(res['v2'], res['se_2'])
 
-  optimize_mechanism(policy='coop', env='ug', time_horizon=1000, n=5, mc_rep=1)
+  optimize_mechanism_nash(env='ug', policy='coop', time_horizon=1000, mc_rep=1, nA=3, eps_upper=1.0)
