@@ -304,7 +304,8 @@ def alternating(a1, a2, u1_mean=None, u2_mean=None, bias_2_1=np.zeros((2, 2)), b
   return r1, r2, close_enough
 
 
-def learn_conditional_expectation(epsilon_1, epsilon_2, env='coop', player=1, sigma_tol=2, sigma_upper=1., n_obs_per_strat=75):
+def learn_conditional_expectation(epsilon_1, epsilon_2, env='coop', player=1, sigma_tol=2, sigma_upper=1.,
+                                  n_obs_per_strat=75):
   """
   Estimate expectation of coop and ind strategies given sigma.
   """
@@ -395,11 +396,19 @@ def learn_conditional_expectation(epsilon_1, epsilon_2, env='coop', player=1, si
 
 # ToDo: encapsulate environment settings in environments
 def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.,
-           env='coop', epsilon_1=1.0, epsilon_2=1., epsilon_21=1., epsilon_12=1., n_obs_per_strat=500):
+           env='coop', epsilon_1=1.0, epsilon_2=1., epsilon_21=1., epsilon_12=1., n_obs_per_strat=500,
+           **kwargs):
   y1 = np.zeros(0)
   y2 = np.zeros(0)
   close_enough_lst = []
   welfare_lst = []
+
+  if env == 'ug':
+    ug_model_ix = kwargs['ug_model_ix']  # UG models: 0: (0.15, 0.05), 1: (0.05, 0.15)
+    if ug_model_ix == 0:
+      F, I = 0.15, 0.05
+    else:
+      F, I = 0.05, 0.15
 
   if policy == 'cb':
     q0_1, q1_1 = learn_conditional_expectation(epsilon_1, epsilon_21, player=1, sigma_tol=sigma_tol,
@@ -424,7 +433,10 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.,
     # Draw context and take action
     sigma = np.random.uniform(0.0, sigma_upper)
     if env == 'ug':
-      alpha_1_over_alpha_0 = np.random.uniform(0, 1)
+      if ug_model_ix == 0:  # Bias prior towards correct model
+        alpha_1_over_alpha_0 = np.random.uniform(0.5, 1.0)
+      else:
+        alpha_1_over_alpha_0 = np.random.uniform(0.0, 0.5)
       alpha_1 = sigma*alpha_1_over_alpha_0
       alpha_2 = sigma - alpha_1
       prior_1 = np.random.dirichlet(np.array([alpha_1, alpha_2]))
@@ -450,7 +462,7 @@ def bandit(policy='cb', time_horizon=50, n=5, sigma_tol=1, sigma_upper=1.,
                                               epsilon_2=epsilon_2)
     elif env == 'ug':
       r1, r2 = meta_ultimatum_game(a1, a2, prior_1, prior_2, eps_1=epsilon_1,
-                                   eps_2=epsilon_2, tau=sigma_tol)
+                                   eps_2=epsilon_2, tau=sigma_tol, F=F, I=I)
 
     y1 = np.hstack((y1, r1))
     y2 = np.hstack((y2, r2))
@@ -486,6 +498,8 @@ def optimize_mechanism(policy='coop', env='coop', time_horizon=1000, n=5, mc_rep
 
 
 def optimize_mechanism_nash(env='coop', time_horizon=100, n=5, mc_rep=100, nA=10, eps_upper=1., policy='coop'):
+  # ToDo: doesn't account for multiple types in ug case
+
   if env == 'coop':
     tau_range = np.logspace(-1, 1, 5)
   elif env == 'ug':
@@ -513,7 +527,7 @@ def optimize_reporting_policy(time_horizon=50, n=5, sigma_upper=1., sigma_tol=1.
 
 
 def nash_reporting_policy(env='coop', time_horizon=100, n=5, mc_rep=100,
-                          nA=10, tau=1., eps_upper=1., policy='coop'):
+                          nA=10, tau=1., eps_upper=1., policy='coop', bandit_kwargs={}):
   # Compute payoff matrix
   if env=='coop':
     epsilon_1_space = np.linspace(0.1, eps_upper, nA)
@@ -522,7 +536,7 @@ def nash_reporting_policy(env='coop', time_horizon=100, n=5, mc_rep=100,
   elif env=='ug':
     epsilon_1_space = np.linspace(0, eps_upper, nA)
     epsilon_2_space = np.linspace(0, eps_upper, nA)
-    sigma_upper = 10.
+    sigma_upper = 1.
 
   if policy == 'cb':
     nA = nA ** 2
@@ -541,11 +555,12 @@ def nash_reporting_policy(env='coop', time_horizon=100, n=5, mc_rep=100,
     for j, (epsilon_2, epsilon_12) in enumerate(epsilon_2_prod):
       se_ij_1 = []
       se_ij_2 = []
-      # print(i, j)
+      print(i, j)
       for rep in range(mc_rep):
         rewards_rep_1, rewards_rep_2, _, _ = \
           bandit(policy=policy, time_horizon=time_horizon, n=n, sigma_tol=tau, sigma_upper=sigma_upper,
-                env=env, epsilon_1=epsilon_1, epsilon_2=epsilon_2, epsilon_12=epsilon_12, epsilon_21=epsilon_21)
+                env=env, epsilon_1=epsilon_1, epsilon_2=epsilon_2, epsilon_12=epsilon_12, epsilon_21=epsilon_21,
+                 **bandit_kwargs)
         payoffs_1[i, j] += np.mean(rewards_rep_1) / mc_rep
         payoffs_2[i, j] += np.mean(rewards_rep_2) / mc_rep
         se_ij_1 += list(rewards_rep_1)
@@ -559,7 +574,7 @@ def nash_reporting_policy(env='coop', time_horizon=100, n=5, mc_rep=100,
   for rep in range(mc_rep):
     rewards_rep_1, rewards_rep_2, _, _ = \
       bandit(policy='ind', time_horizon=time_horizon, n=n, sigma_tol=tau, sigma_upper=sigma_upper,
-             env=env, epsilon_1=epsilon_1, epsilon_2=epsilon_2)
+             env=env, epsilon_1=epsilon_1, epsilon_2=epsilon_2, **bandit_kwargs)
     payoffs_1[nA, :] += np.mean(rewards_rep_1) / mc_rep
     payoffs_1[:-1, nA] += np.mean(rewards_rep_1) / mc_rep
     payoffs_2[nA, :] += np.mean(rewards_rep_2) / mc_rep
@@ -660,11 +675,12 @@ if __name__ == "__main__":
   # for sigma_tol in sigma_tol_list:
   #   compare_policies(None, env='ug', replicates=1, n_private_obs=2,
   #                    time_horizon=10000, sigma_tol=sigma_tol, sigma_upper=1)
-  # res = nash_reporting_policy(env='ug', policy='cb', time_horizon=1000, n=2, mc_rep=1,
-  #                             nA=4, tau=0.3, eps_upper=0.3)
-  # print(res['payoffs_1'].round(2))
-  # print(res['payoffs_2'].round(2))
-  # print(res['v1'], res['se_1'])
-  # print(res['v2'], res['se_2'])
+  res = nash_reporting_policy(env='ug', policy='coop', time_horizon=1000, n=2, mc_rep=1,
+                              nA=4, tau=1.0, eps_upper=1.0, bandit_kwargs={'ug_model_ix': 1})
+  print(res['payoffs_1'].round(2))
+  print(res['payoffs_2'].round(2))
+  print(res['e1'], res['e2'])
+  print(res['v1'], res['se_1'])
+  print(res['v2'], res['se_2'])
 
-  optimize_mechanism_nash(env='ug', policy='coop', time_horizon=1000, mc_rep=1, nA=3, eps_upper=1.0)
+  # optimize_mechanism_nash(env='coop', policy='coop', time_horizon=10000, mc_rep=1, nA=3, eps_upper=2.0)

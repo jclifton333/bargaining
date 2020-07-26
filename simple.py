@@ -12,7 +12,8 @@ def u_responder(s, f):
 
 def u_proposer(s, f):
   u_R = u_responder(s, f)
-  u_P = (1 - s)*(u_R > 0)
+  accept = (u_R > 0)
+  u_P = (1 - s)*accept - (1 - accept)
   return u_P
 
 
@@ -30,7 +31,7 @@ def simple_proposer_posterior_expectation(s, prior, models):
   return u_P_post
 
 
-def meta_ultimatum_game(a1, a2, prior_1, prior_2, eps_1=0.05, eps_2=0.2, tau=1.0):
+def meta_ultimatum_game(a1, a2, prior_1, prior_2, eps_1=0.05, eps_2=0.2, tau=1.0, F=None, I=None):
   # ToDo: assuming truthfully reported priors
 
   prior_1_reported = np.zeros(2)
@@ -45,18 +46,21 @@ def meta_ultimatum_game(a1, a2, prior_1, prior_2, eps_1=0.05, eps_2=0.2, tau=1.0
   prior_2_reported[1] = 1 - prior_2_reported[0]
 
   if a1 and a2 and np.abs(prior_1_reported[0] - prior_2_reported[0]) < tau:
-    u_r, u_p = ultimatum_game(prior_1_reported, prior_2_reported, True)
+    u_r, u_p = ultimatum_game(prior_1_reported, prior_2_reported, True, F=F, I=I)
   else:
-    u_r, u_p = ultimatum_game(prior_1, prior_2, False)
+    u_r, u_p = ultimatum_game(prior_1, prior_2, False, F=F, I=I)
 
   return u_r, u_p
 
 
-def ultimatum_game(prior_1, prior_2, combine):
+def ultimatum_game(prior_1, prior_2, combine, F=None, I=None):
   # Proposer is player 1
 
   models = [(0.05, 0.15), (0.15, 0.05)]
-  F, I = 0.05, 0.15
+  if F is None:
+    F = 0.15
+  if I is None:
+    I = 0.05
   srange = np.linspace(0, 1, 20)
 
   if combine:
@@ -69,9 +73,10 @@ def ultimatum_game(prior_1, prior_2, combine):
                          srange])
     offer_ = srange[np.argmax(u_post_1)]
 
-  u_responder_ = u_responder(offer_, F)
-  accept = (u_responder_ > 0)
+  u_responder_offer = u_responder(offer_, F)
+  accept = (u_responder_offer > 0)
   u_proposer_ = (1 - offer_)*accept
+  u_responder_ = u_responder_offer*accept
 
   return u_proposer_, u_responder_
 

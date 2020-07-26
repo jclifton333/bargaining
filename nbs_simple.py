@@ -202,7 +202,6 @@ def nbs_for_independent_gaussan_priors(mu_ay_1, mu_ay_2, mu_az_1, mu_az_2, budge
                                                        az_1_prior_draws)])
 
       # If feasible for all types, compute nash welfare; otherwise, throw out this action
-      pdb.set_trace()
       if np.sum(player_2_welfare_at_each_draw == 0) == 0 and np.sum(player_1_welfare_at_each_draw == 0) == 0:
         nash_welfare_ = np.mean(player_1_welfare_at_each_draw) + np.mean(player_2_welfare_at_each_draw)
         if nash_welfare_ > optimal_welfare:
