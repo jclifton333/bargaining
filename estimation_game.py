@@ -676,7 +676,7 @@ if __name__ == "__main__":
   #   compare_policies(None, env='ug', replicates=1, n_private_obs=2,
   #                    time_horizon=10000, sigma_tol=sigma_tol, sigma_upper=1)
   res = nash_reporting_policy(env='ug', policy='coop', time_horizon=1000, n=2, mc_rep=1,
-                              nA=4, tau=1.0, eps_upper=1.0, bandit_kwargs={'ug_model_ix': 1})
+                              nA=3, tau=1.0, eps_upper=1., bandit_kwargs={'ug_model_ix': 1})
   print(res['payoffs_1'].round(2))
   print(res['payoffs_2'].round(2))
   print(res['e1'], res['e2'])

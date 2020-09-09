@@ -13,7 +13,7 @@ def u_responder(s, f):
 def u_proposer(s, f):
   u_R = u_responder(s, f)
   accept = (u_R > 0)
-  u_P = (1 - s)*accept - (1 - accept)
+  u_P = (1 - s)*accept
   return u_P
 
 
@@ -45,7 +45,9 @@ def meta_ultimatum_game(a1, a2, prior_1, prior_2, eps_1=0.05, eps_2=0.2, tau=1.0
   prior_2_reported[0] = np.max((prior_2[0] + prior_2_distort, 0.))
   prior_2_reported[1] = 1 - prior_2_reported[0]
 
-  if a1 and a2 and np.abs(prior_1_reported[0] - prior_2_reported[0]) < tau:
+  # close_enough = np.abs(prior_1_reported[0] - prior_2_reported[0]) < tau
+  close_enough = True
+  if a1 and a2 and close_enough:
     u_r, u_p = ultimatum_game(prior_1_reported, prior_2_reported, True, F=F, I=I)
   else:
     u_r, u_p = ultimatum_game(prior_1, prior_2, False, F=F, I=I)
