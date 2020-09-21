@@ -73,10 +73,15 @@ def get_bipd_policies_as_matrix(th):
 
 def bipd(gamma=0.96):
   dims = [30, 30]
-  payout_mat_1 = torch.Tensor([[3, 0, -3], [0, 1, -3],
+  # payout_mat_1 = torch.Tensor([[3, 0, -3], [0, 1, -3],
+  #                              [2, 2, -1]])
+  # payout_mat_2 = torch.Tensor([[1, 0, 2], [0, 3, 2],
+  #                              [-3, -3, -1]])
+  payout_mat_1 = torch.Tensor([[3.5, 0, -3], [0, 1, -3],
                                [2, 2, -1]])
   payout_mat_2 = torch.Tensor([[1, 0, 2], [0, 3, 2],
                                [-3, -3, -1]])
+
   def Ls(th):
     p, p_1, p_2, P = get_bipd_policies_as_matrix(th)
     M = -torch.matmul(p, torch.inverse(torch.eye(9)-gamma*P))
@@ -202,14 +207,14 @@ if __name__ == "__main__":
   gamma = 0.96
   dims, Ls = bipd(gamma)
 
-  num_runs = 5
+  num_runs = 20
   num_epochs = 100
   alpha = 1
   std = 1
 
   plt.figure(figsize=(15, 8))
   cols = ['red']
-  algs = ['lola']
+  algs = ['nl']
   for col, algo in zip(cols, algs):
     losses_out = np.zeros((num_runs, num_epochs))
     # ToDo: should have separate lists for each alg
