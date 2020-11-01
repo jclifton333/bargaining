@@ -61,7 +61,7 @@ def report_ev(G_report_ix, G_observed_ix, G_lst_i, G_lst_j, mechanism_probs, pla
 
     # Get default player j action
     G_observed_j_i = G_lst_i[G_observed_j_ix]
-    G_observed_j_j = G_lst_i[G_observed_j_ix]
+    G_observed_j_j = G_lst_j[G_observed_j_ix]
 
     if G_observed_j_i[1, 0] + G_observed_j_j[1, 0] > G_observed_j_i[0, 1] + G_observed_j_j[0, 1]:
       a1_j_default, a2_j_default = 1, 0
