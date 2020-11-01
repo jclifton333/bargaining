@@ -7,9 +7,9 @@ CRASH = -10
 G1_1 = np.array([[0, -1], [3, CRASH]])
 G1_2 = np.array([[0, 2], [-1, CRASH]])
 G2_1 = np.array([[0, -1], [2, CRASH]])
-G2_2 = np.array([[0, 3], [-1, CRASH]])
-G3_1 = np.array([[0, -1], [2, CRASH]])
-G3_2 = np.array([[0, 4], [-1, CRASH]])
+G2_2 = np.array([[0, 3.1], [-1, CRASH]])
+G3_1 = np.array([[0, -1], [4, CRASH]]) / 3
+G3_2 = np.array([[0, 2], [-1, CRASH]]) / 3
 
 
 def report_ev(G_report_ix, G_observed_ix, G_lst_i, G_lst_j, mechanism_probs, player_ix, prior_parameters=np.ones(3)):
@@ -43,10 +43,10 @@ def report_ev(G_report_ix, G_observed_ix, G_lst_i, G_lst_j, mechanism_probs, pla
     a2_default = a2_i_default
 
   for G_observed_j_ix in range(3):
-    if player_ix == 1:
-      mechanism_prob = mechanism_probs[G_report_ix, G_observed_j_ix]
-    elif player_ix == 2:
-      mechanism_prob = mechanism_probs[G_observed_j_ix, G_report_ix]
+    # if player_ix == 1:
+    #   mechanism_prob = mechanism_probs[G_report_ix, G_observed_j_ix]
+    # elif player_ix == 2:
+    #   mechanism_prob = mechanism_probs[G_observed_j_ix, G_report_ix]
     posterior_prob = posterior_probs[G_observed_j_ix]
 
     # Average reported games
@@ -84,6 +84,12 @@ def report_ev(G_report_ix, G_observed_ix, G_lst_i, G_lst_j, mechanism_probs, pla
       ev_under_action_profile += ev_k*posterior_probs[k]
       default_ev += G_i[a1_default, a2_default]*posterior_probs[k]
 
+    # posterior_parameters_j = prior_parameters
+    # posterior_parameters_j[G_observed_j_ix] += 1
+    # posterior_probs_j = posterior_parameters_j / posterior_parameters_j.sum()
+    # mechanism_prob = posterior_probs_j[report_ix]
+    # mechanism_prob = 1
+    mechanism_prob = (G_report_ix == G_observed_j_ix)
     report_ev_ += ev_under_action_profile*posterior_prob*mechanism_prob + \
                   default_ev*posterior_prob*(1-mechanism_prob)
   return report_ev_
@@ -100,7 +106,8 @@ if __name__ == "__main__":
   for report_ix in range(3):
     for observation_ix in range(3):
       report_ev_ = \
-        report_ev(report_ix, observation_ix, G1_lst, G2_lst, mechanism_probs, player_ix, prior_parameters=np.ones(3))
+        report_ev(report_ix, observation_ix, G1_lst, G2_lst, mechanism_probs, player_ix,
+                  prior_parameters=np.array([1, 1, 0.0]))
       player_1_payoffs[observation_ix, report_ix] = report_ev_
 
   # Player 2 report payoffs
@@ -109,7 +116,8 @@ if __name__ == "__main__":
   for report_ix in range(3):
     for observation_ix in range(3):
       report_ev_ = \
-        report_ev(report_ix, observation_ix, G2_lst, G1_lst, mechanism_probs, player_ix, prior_parameters=np.ones(3))
+        report_ev(report_ix, observation_ix, G2_lst, G1_lst, mechanism_probs, player_ix,
+                  prior_parameters=np.array([1, 1, 0.0]))
       player_2_payoffs[observation_ix, report_ix] = report_ev_
 
   print('player 1:\n {}'.format(player_1_payoffs))
