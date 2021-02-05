@@ -4,15 +4,16 @@ import pdb
 
 # Define payoff matrices
 CRASH = -10
-G1_1 = np.array([[-1, -1], [3, CRASH]])
-G1_2 = np.array([[-1, 2], [-1, CRASH]])
-G2_1 = np.array([[-1, -1], [2, CRASH]])
-G2_2 = np.array([[-1, 3.1], [-1, CRASH]])
-G3_1 = np.array([[-1, -1], [4, CRASH]]) / 3
-G3_2 = np.array([[-1, 2], [-1, CRASH]]) / 3
+G1_1 = np.array([[-3, -1], [3, CRASH]])
+G1_2 = np.array([[-3, 2], [-1, CRASH]])
+G2_1 = np.array([[-3, -1], [2, CRASH]])
+G2_2 = np.array([[-3, 3.1], [-1, CRASH]])
+G3_1 = np.array([[-3, -1], [4, CRASH]]) / 3
+G3_2 = np.array([[-3, 2], [-1, CRASH]]) / 3
 
 
-def report_ev(G_report_ix, G_observed_ix, G_lst_i, G_lst_j, mechanism_probs, player_ix, prior_parameters=np.ones(3)):
+def report_ev(G_report_ix, G_observed_ix, G_lst_i, G_lst_j, mechanism_probs, player_ix, prior_parameters=np.ones(3),
+              temperature=None):
   """
   Get the expected value of reporting G_report_ix, assuming the other player reported truthfully.
 
@@ -92,23 +93,31 @@ def report_ev(G_report_ix, G_observed_ix, G_lst_i, G_lst_j, mechanism_probs, pla
       ev_under_action_profile_j += G_j[a1, a2]*posterior_probs_j[k]
       default_ev += G_i[a1_default, a2_default]*posterior_probs[k]
       default_ev_j += G_j[a2_default, a2_default]*posterior_probs_j[k]
-    punish_ev = CRASH
-    # punish_ev = default_ev
+    # punish_ev = CRASH
+    punish_ev = default_ev
 
-    exp_posterior_probs_j = np.exp(posterior_probs_j * 5)
-    transformed_posterior_probs_j = exp_posterior_probs_j / exp_posterior_probs_j.sum()
-    mechanism_prob = transformed_posterior_probs_j[G_report_ix]
+    if temperature is None:
+      transformed_posterior_probs_j = posterior_probs_j
+      transformed_posterior_probs = posterior_probs
+    else:
+      exp_posterior_probs_j = np.exp(posterior_probs_j * temperature)
+      transformed_posterior_probs_j = exp_posterior_probs_j / exp_posterior_probs_j.sum()
+      exp_posterior_probs = np.exp(posterior_probs * temperature)
+      transformed_posterior_probs = exp_posterior_probs / exp_posterior_probs.sum()
+
+    # transformed_posterior_probs_j = posterior_probs_j
+    # mechanism_prob = transformed_posterior_probs_j[G_report_ix]
     # mechanism_prob = 1
-    # mechanism_prob = (G_report_ix == G_observed_j_ix)
+    mechanism_prob = transformed_posterior_probs_j[G_report_ix] * transformed_posterior_probs[G_observed_j_ix]
     value_j_ix = ev_under_action_profile*posterior_prob*mechanism_prob + \
                   punish_ev*posterior_prob*(1 - mechanism_prob)
-    print(f'obs i: {observation_ix} report i: {G_report_ix} report j: {G_observed_j_ix} value: {ev_under_action_profile} default_ev: {default_ev} prob: {posterior_prob} mechanism prob: {mechanism_prob}')
+    # print(f'obs i: {observation_ix} report i: {G_report_ix} report j: {G_observed_j_ix} value: {ev_under_action_profile} default_ev: {default_ev} prob: {posterior_prob} mechanism prob: {mechanism_prob}')
     report_ev_ += value_j_ix
     default_ev_ += default_ev*posterior_prob
   return report_ev_, default_ev_
 
 
-if __name__ == "__main__":
+def evaluate_at_temperature(temperature):
   G1_lst = [G1_1, G2_1]
   G2_lst = [G1_2, G2_2]
   mechanism_probs = np.eye(2)
@@ -121,7 +130,7 @@ if __name__ == "__main__":
     for report_ix in range(2):
       report_ev_, default_ev_ = \
         report_ev(report_ix, observation_ix, G1_lst, G2_lst, mechanism_probs, player_ix,
-                  prior_parameters=np.array([2, 1, 0.0]))
+                  prior_parameters=np.array([1, 1]), temperature=temperature)
       player_1_payoffs[observation_ix, report_ix] = report_ev_
       player_1_default_payoffs[observation_ix, report_ix] = default_ev_
 
@@ -133,23 +142,18 @@ if __name__ == "__main__":
     for report_ix in range(2):
       report_ev_, default_ev_ = \
         report_ev(report_ix, observation_ix, G2_lst, G1_lst, mechanism_probs, player_ix,
-                  prior_parameters=np.array([2, 1, 0.0]))
+                  prior_parameters=np.array([1, 1]), temperature=temperature)
       player_2_payoffs[observation_ix, report_ix] = report_ev_
       player_2_default_payoffs[observation_ix, report_ix] = default_ev_
 
   print('player 1:\n {}'.format(player_1_payoffs))
   print('player 1 default:\n {}'.format(player_1_default_payoffs))
   print('player 2:\n {}'.format(player_2_payoffs))
+  print('player 2 default:\n {}'.format(player_2_default_payoffs))
 
 
-
-
-
-
-
-
-
-
-
-
-
+if __name__ == "__main__":
+  temperatures = [-10]
+  for temperature in temperatures:
+    print('temperature: {}'.format(temperature))
+    evaluate_at_temperature(temperature)
