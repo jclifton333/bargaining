@@ -91,17 +91,79 @@ def create_payoff_matrix(p, c, low_cost, high_cost, commit_prior_if_committed, c
   return payoffs_threatener, payoffs_target
 
 
+def threat_execution_probability_from_profile(threatener_strategy, target_strategy, commit_prior_if_committed,
+                                              commit_prior_if_not_committed, cost_prior):
+  # ToDo: think again about what priors to use to evaluate this
+  threat_execution_probability = commit_prior_if_not_committed[1] * \
+                                 (threatener_strategy[1] == 1) * ((target_strategy[0] == 1) * cost_prior[0] + \
+                                                                  (target_strategy[1] == 1) * cost_prior[1])
+  return threat_execution_probability
+
+
 def get_equilibria(p, c, low_cost, high_cost, commit_prior_if_committed, commit_prior_if_not_committed, cost_prior):
   payoffs_threatener, payoffs_target = create_payoff_matrix(p, c, low_cost, high_cost, commit_prior_if_committed,
                                                             commit_prior_if_not_committed, cost_prior)
   game = nashpy.Game(payoffs_threatener, payoffs_target)
   eqs = list(game.support_enumeration())
-  print(f'{payoffs_threatener}\n{payoffs_target}\n{eqs}')
-  return
+  # ToDo: check for multiple equilibria?
+  return game, eqs[0]
+
+
+def cross_play(p, c, low_cost, high_cost, prior_on_commit_prior_if_committed, commit_prior_if_not_committed,
+               prior_on_cost_prior, true_cost_prior, true_commit_prior_if_committed, reps=10):
+
+  # true_game, _ = get_equilibria(p, c, low_cost, high_cost, true_commit_prior_if_committed, commit_prior_if_not_committed,
+  #                               true_cost_prior)
+
+  total_threat_execution_probability = 0.
+  for rep in range(reps):
+    # Draw each player's priors
+    threatener_cost_prior = prior_on_cost_prior()
+    target_cost_prior = prior_on_cost_prior()
+    threatener_commit_prior_if_committed = prior_on_commit_prior_if_committed()
+    target_commit_prior_if_committed = prior_on_commit_prior_if_committed()
+
+    # Get corresponding predictions
+    _, threatener_eqs = get_equilibria(p, c, low_cost, high_cost, threatener_commit_prior_if_committed,
+                                    commit_prior_if_not_committed, threatener_cost_prior)
+    _, target_eqs = get_equilibria(p, c, low_cost, high_cost, target_commit_prior_if_committed,
+                                commit_prior_if_not_committed, target_cost_prior)
+    threat_execution_probability = threat_execution_probability_from_profile(threatener_eqs[0], target_eqs[1],
+                                                                             true_commit_prior_if_committed,
+                                                                             commit_prior_if_not_committed,
+                                                                             true_cost_prior)
+    total_threat_execution_probability += threat_execution_probability / reps
+  return total_threat_execution_probability
+
+
+def get_prior_over_priors(true_prior, variance_multiplier):
+  """
+  beta distribution over prior[0], centered at true_prior[0]
+  """
+  mean = true_prior[0]
+  variance = variance_multiplier * mean * (1 - mean)
+  alpha = mean**2 * ((1-mean) / variance - (1 / mean))
+  beta = alpha * ((1/mean) - 1)
+
+  def prior_over_priors():
+    p = np.random.beta(a=alpha, b=beta)
+    return [p, 1-p]
+
+  return prior_over_priors
 
 
 if __name__ == "__main__":
-  # ToDo: committing should increase prior on the probability that agent has credibly committed
+  true_commit_prior_if_committed = [0.5, 0.5]
+  true_cost_prior = [0.1, 0.9]
+
+  commit_prior_variance_multiplier = 0.99  # Must be < 1
+  cost_prior_variance_multiplier = 0.99
+
+  # Get distributions over credences
+  prior_on_cost_prior = get_prior_over_priors(true_cost_prior, cost_prior_variance_multiplier)
+  prior_on_commit_prior_if_committed = get_prior_over_priors(true_commit_prior_if_committed,
+                                                             commit_prior_variance_multiplier)
+
   # ToDo: need to account for subgame perfection
   p = 0.5
   c = 0.01
@@ -110,6 +172,7 @@ if __name__ == "__main__":
   commit_prior_if_committed = [0.5, 0.5]
   commit_prior_if_not_committed = [0.9, 0.1]
   cost_prior = [0.1, 0.9]
-  get_equilibria(p, c, low_cost, high_cost, commit_prior_if_committed, commit_prior_if_not_committed, cost_prior)
-
+  threat_prob = cross_play(p, c, low_cost, high_cost, prior_on_commit_prior_if_committed, commit_prior_if_not_committed,
+                           prior_on_cost_prior, true_cost_prior, true_commit_prior_if_committed, reps=10)
+  print(threat_prob)
 
