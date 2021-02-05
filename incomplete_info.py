@@ -149,12 +149,11 @@ def get_equilibria(p, c, low_cost, high_cost, commit_prior_if_committed, commit_
   return game, eqs[0]
 
 
-def target_best_response(action_threatener, signal, p, c, low_cost, high_cost, prior_if_signal, prior_if_no_signal,
-                         cost_prior):
-  if signal == 0:
-    p_carry_out = prior_if_no_signal[1]
-  else:
-    p_carry_out = prior_if_signal[1]
+def target_best_response(action_threatener, commit_prior, p, c, low_cost, high_cost, cost_prior):
+
+  # ToDo: is the signal business necessary? Can we just increase the prior?
+
+  p_carry_out = commit_prior[1]
 
   # Get best response for target
   payoff_fight_l = (1 - p) - p*low_cost*p_carry_out
@@ -175,85 +174,78 @@ def target_best_response(action_threatener, signal, p, c, low_cost, high_cost, p
   return action_l, action_h, payoff_threatener
 
 
-def threatener_lookahead(p, c, low_cost, high_cost, prior_if_signal, prior_if_no_signal, prob_signal_if_commit,
-                         prob_signal_if_no_commit, cost_prior):
-  target_best_response_partial = partial(target_best_response, p=p, c=c, low_cost=low_cost, high_cost=high_cost,
-                                         prior_if_signal=prior_if_signal, prior_if_no_signal=prior_if_no_signal,
-                                         cost_prior=cost_prior)
-  payoff_commit = prob_signal_if_commit * target_best_response_partial(1, 1)[2] + \
-                    (1 - prob_signal_if_commit) * target_best_response_partial(1, 0)[2]
-  payoff_dont_commit = prob_signal_if_no_commit * target_best_response_partial(0, 1)[2] + \
-                        (1 - prob_signal_if_no_commit) * target_best_response_partial(0, 0)[2]
-  commit_type_action = payoff_commit > payoff_dont_commit
-  return 0, commit_type_action
-
-
-def get_sequential_equilibrium(p, c, low_cost, high_cost, commit_prior_if_committed, commit_prior_if_not_committed,
+def get_sequential_equilibrium(p, c, low_cost, high_cost, commit_prior_if_commit, commit_prior_if_no_commit,
                                cost_prior):
-  pass
+  target_best_response_partial = partial(target_best_response, p=p, c=c, low_cost=low_cost, high_cost=high_cost,
+                                         cost_prior=cost_prior)
+  action_l_commit, action_h_commit, payoff_commit = target_best_response_partial(1, commit_prior_if_commit)
+  action_l_no_commit, action_h_no_commit, payoff_dont_commit = \
+    target_best_response_partial(0, commit_prior_if_no_commit)
+  commit_type_action = payoff_commit > payoff_dont_commit
 
-
-def randomize_between_priors(prior1, prior2, p):
-  if p < np.random.random():
-    return prior1
+  if commit_type_action == 0:
+    action_l, action_h = action_l_no_commit, action_h_no_commit
   else:
-    return prior2
+    action_l, action_h = action_l_commit, action_h_commit
+
+  return 0, commit_type_action, action_l, action_h
 
 
-def cross_play(p, c, low_cost, high_cost, prior_on_high_commit_prior, low_commit_prior,
-               prior_on_cost_prior, true_cost_prior, true_high_commit_prior, p_high_prior_given_commit=0.6,
-               p_high_prior_given_not_commit=0.4, reps=10):
+def get_threat_execution_probability_sequential(threatener_strategy, target_strategy, commit_prior_if_no_commit,
+                                                cost_prior):
+  # ToDo: convince yourself that this is being done wrt the correct prior
+  threat_execution_probability = \
+    threatener_strategy[1] * commit_prior_if_no_commit[1] * (cost_prior[0] * target_strategy[0] + cost_prior[1] *
+                                                             target_strategy[1])
+  return threat_execution_probability
 
-  true_game, _ = get_equilibria(p, c, low_cost, high_cost, true_high_commit_prior, low_commit_prior,
-                                true_cost_prior)
+
+def cross_play(p, c, low_cost, high_cost, prior_on_commit_prior_if_committed, commit_prior_if_not_committed,
+               prior_on_cost_prior, true_cost_prior, true_commit_prior_if_committed,
+               reps=10):
 
   total_threat_execution_probability = 0.
-  total_threat_made_probability = 0.
   cgs_total_threat_execution_probability = 0.
-  default_payoffs = np.zeros(2)
-  cgs_payoffs = np.zeros(2)
-  prior_diffs = []
   for rep in range(reps):
     # Draw each player's priors
     threatener_cost_prior = prior_on_cost_prior()
     target_cost_prior = prior_on_cost_prior()
 
-    threatener_high_prior = prior_on_high_commit_prior()
-    target_high_prior = prior_on_high_commit_prior()
-
     threatener_commit_prior_if_committed = prior_on_commit_prior_if_committed()
     target_commit_prior_if_committed = prior_on_commit_prior_if_committed()
-    prior_diffs.append(threatener_commit_prior_if_committed[0] - target_commit_prior_if_committed[0])
 
     # Get corresponding predictions
-    _, threatener_eqs = get_equilibria(p, c, low_cost, high_cost, threatener_commit_prior_if_committed,
-                                    commit_prior_if_not_committed, threatener_cost_prior)
-    _, target_eqs = get_equilibria(p, c, low_cost, high_cost, target_commit_prior_if_committed,
-                                commit_prior_if_not_committed, target_cost_prior)
-    threat_execution_probability = threat_execution_probability_from_profile(threatener_eqs[0], target_eqs[1],
-                                                                             true_commit_prior_if_committed,
-                                                                             commit_prior_if_not_committed,
-                                                                             true_cost_prior)
+    threatener_n, threatener_c, _, _ = get_sequential_equilibrium(p, c, low_cost, high_cost,
+                                                                  threatener_commit_prior_if_committed,
+                                                                  commit_prior_if_not_committed,
+                                                                  threatener_cost_prior)
+
+    _, _, target_l, target_h = get_sequential_equilibrium(p, c, low_cost, high_cost,
+                                                          target_commit_prior_if_committed,
+                                                          commit_prior_if_not_committed,
+                                                          target_cost_prior)
+    print((threatener_n, threatener_c), (target_l, target_h))
+    threat_execution_probability = get_threat_execution_probability_sequential((threatener_n, threatener_c),
+                                                                               (target_l, target_h),
+                                                                               commit_prior_if_not_committed,
+                                                                               true_cost_prior)
     total_threat_execution_probability += threat_execution_probability / reps
-    total_threat_made_probability += threatener_eqs[0][1] / reps
-    default_payoffs += true_game[(threatener_eqs[0], target_eqs[1])] / reps
 
     # Get outcome
     cgs_cost_prior = (threatener_cost_prior + target_cost_prior) / 2
     cgs_commit_prior_if_committed = (threatener_commit_prior_if_committed + target_commit_prior_if_committed) / 2
-    _, cgs_eqs = get_equilibria(p, c, low_cost, high_cost, cgs_commit_prior_if_committed,
-                                commit_prior_if_not_committed, cgs_cost_prior)
-    cgs_threat_execution_probability = threat_execution_probability_from_profile(cgs_eqs[0], cgs_eqs[1],
-                                                                                 true_commit_prior_if_committed,
-                                                                                 commit_prior_if_not_committed,
-                                                                                 true_cost_prior)
+    threatener_n_cgs, threatener_c_cgs, target_l_cgs, target_h_cgs = \
+      get_sequential_equilibrium(p, c, low_cost, high_cost,
+                                 cgs_commit_prior_if_committed,
+                                 commit_prior_if_not_committed,
+                                 cgs_cost_prior)
+    cgs_threat_execution_probability = get_threat_execution_probability_sequential((threatener_n_cgs, threatener_c_cgs),
+                                                                                   (target_l_cgs, target_h_cgs),
+                                                                                   commit_prior_if_not_committed,
+                                                                                   true_cost_prior)
     cgs_total_threat_execution_probability += cgs_threat_execution_probability / reps
-    cgs_payoffs += true_game[cgs_eqs] / reps
 
-  print(default_payoffs, cgs_payoffs)
-
-  return total_threat_execution_probability, cgs_total_threat_execution_probability, total_threat_made_probability, \
-         prior_diffs
+  return total_threat_execution_probability, cgs_total_threat_execution_probability
 
 
 def get_prior_over_priors(true_prior, variance_multiplier, size=1):
@@ -276,8 +268,8 @@ def get_prior_over_priors(true_prior, variance_multiplier, size=1):
 
 if __name__ == "__main__":
   # ToDo: enforce P(commitment type | commitment) > P(commitment type | no commitment)
-  low_commit_prior = [0.9, 0.1]
-  true_high_commit_prior = [0.5, 0.5]
+  commit_prior_if_not_committed = [0.9, 0.1]
+  true_commit_prior_if_committed = [0.5, 0.5]
   true_cost_prior = [0.9, 0.1]
 
   commit_prior_variance_multiplier = 0.9  # Must be < 1
@@ -285,21 +277,21 @@ if __name__ == "__main__":
 
   # Get distributions over credences
   prior_on_cost_prior = get_prior_over_priors(true_cost_prior, cost_prior_variance_multiplier)
-  prior_on_high_commit_prior = get_prior_over_priors(true_high_commit_prior,
-                                                     commit_prior_variance_multiplier)
+  prior_on_commit_prior_if_committed = get_prior_over_priors(true_commit_prior_if_committed,
+                                                             commit_prior_variance_multiplier)
 
   # ToDo: need to account for subgame perfection
   p = 0.5
   c = 0.1
   low_cost = 0.2
   high_cost = 1.
-  threat_prob, cgs_threat_prob, threat_made_prob, prior_diffs = cross_play(p, c, low_cost, high_cost,
-                                                                           prior_on_high_commit_prior,
-                                                                           low_commit_prior,
-                                                                           prior_on_cost_prior,
-                                                                           true_cost_prior,
-                                                                           true_commit_prior_if_committed, reps=100)
-  print(threat_prob, cgs_threat_prob, threat_made_prob)
+  threat_prob, cgs_threat_prob = cross_play(p, c, low_cost, high_cost,
+                                            prior_on_commit_prior_if_committed,
+                                            commit_prior_if_not_committed,
+                                            prior_on_cost_prior,
+                                            true_cost_prior,
+                                            true_commit_prior_if_committed, reps=10)
+  print(threat_prob, cgs_threat_prob)
   # plt.hist(prior_diffs)
   # plt.show()
 
