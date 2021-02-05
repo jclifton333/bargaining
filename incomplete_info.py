@@ -28,7 +28,8 @@ def complete_information_payoffs(threatener_type, target_type, p, c, low_cost, h
   return u_threatener, u_target
 
 
-def get_payoffs(threatener_profile, target_profile, commit_prior, cost_prior, low_cost, high_cost, p, c):
+def get_payoffs(threatener_profile, target_profile, commit_prior_if_committed, commit_prior_if_not_committed,
+                cost_prior, low_cost, high_cost, p, c):
   """
   Threatener actions {Not commit, Commit} indexed {0, 1}
   Target actions {Give in, Fight} indexed {0, 1}
@@ -39,6 +40,11 @@ def get_payoffs(threatener_profile, target_profile, commit_prior, cost_prior, lo
 
   for threatener_type_ix, threatener_action in enumerate(threatener_profile):
     for target_type_ix, target_action in enumerate(target_profile):
+      if threatener_action == 0:
+        commit_prior = commit_prior_if_not_committed
+      else:
+        commit_prior = commit_prior_if_committed
+
       u_threatener_type, u_target_type = complete_info_partial(threatener_type_ix, target_type_ix)
       u_threatener += cost_prior[target_type_ix] * commit_prior[threatener_type_ix] * \
                       u_threatener_type[threatener_action, target_action]
@@ -48,7 +54,8 @@ def get_payoffs(threatener_profile, target_profile, commit_prior, cost_prior, lo
   return u_threatener, u_target
 
 
-def create_payoff_matrix(p, c, low_cost, high_cost, commit_prior, cost_prior):
+def create_payoff_matrix(p, c, low_cost, high_cost, commit_prior_if_committed, commit_prior_if_not_committed,
+                         cost_prior):
   """
   Target type is in {L, H} for Low/High cost of threat execution
   Threatener type is in {N, C} for able to Commit/not able to commit
@@ -71,7 +78,9 @@ def create_payoff_matrix(p, c, low_cost, high_cost, commit_prior, cost_prior):
   threatener_profiles = [(0, 0), (0, 1)]
   target_profiles = [(0, 0), (0, 1), (1, 0), (1, 1)]
 
-  get_payoffs_partial = partial(get_payoffs, commit_prior=commit_prior, cost_prior=cost_prior, low_cost=low_cost,
+  get_payoffs_partial = partial(get_payoffs, commit_prior_if_committed=commit_prior_if_committed,
+                                commit_prior_if_not_committed=commit_prior_if_not_committed,
+                                cost_prior=cost_prior, low_cost=low_cost,
                                 high_cost=high_cost, p=p, c=c)
   for threatener_profile_ix, threatener_profile in enumerate(threatener_profiles):
     for target_profile_ix, target_profile in enumerate(target_profiles):
@@ -82,8 +91,9 @@ def create_payoff_matrix(p, c, low_cost, high_cost, commit_prior, cost_prior):
   return payoffs_threatener, payoffs_target
 
 
-def get_equilibria(p, c, low_cost, high_cost, commit_prior, cost_prior):
-  payoffs_threatener, payoffs_target = create_payoff_matrix(p, c, low_cost, high_cost, commit_prior, cost_prior)
+def get_equilibria(p, c, low_cost, high_cost, commit_prior_if_committed, commit_prior_if_not_committed, cost_prior):
+  payoffs_threatener, payoffs_target = create_payoff_matrix(p, c, low_cost, high_cost, commit_prior_if_committed,
+                                                            commit_prior_if_not_committed, cost_prior)
   game = nashpy.Game(payoffs_threatener, payoffs_target)
   eqs = list(game.support_enumeration())
   print(f'{payoffs_threatener}\n{payoffs_target}\n{eqs}')
@@ -91,12 +101,15 @@ def get_equilibria(p, c, low_cost, high_cost, commit_prior, cost_prior):
 
 
 if __name__ == "__main__":
+  # ToDo: committing should increase prior on the probability that agent has credibly committed
+  # ToDo: need to account for subgame perfection
   p = 0.5
   c = 0.01
   low_cost = 0.1
-  high_cost = 10.0
-  commit_prior = [0.5, 0.5]
-  cost_prior = [0.5, 0.5]
-  get_equilibria(p, c, low_cost, high_cost, commit_prior, cost_prior)
+  high_cost = 0.5
+  commit_prior_if_committed = [0.5, 0.5]
+  commit_prior_if_not_committed = [0.9, 0.1]
+  cost_prior = [0.1, 0.9]
+  get_equilibria(p, c, low_cost, high_cost, commit_prior_if_committed, commit_prior_if_not_committed, cost_prior)
 
 
