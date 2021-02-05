@@ -1,5 +1,7 @@
 import numpy as np
 from functools import partial
+import nashpy
+import pdb
 
 
 def complete_information_payoffs(threatener_type, target_type, p, c, low_cost, high_cost):
@@ -66,7 +68,7 @@ def create_payoff_matrix(p, c, low_cost, high_cost, commit_prior, cost_prior):
   payoffs_threatener = np.zeros((2, 4))
   payoffs_target = np.zeros((2, 4))
 
-  threatener_profiles = [(1, 0), (0, 0)]
+  threatener_profiles = [(0, 0), (0, 1)]
   target_profiles = [(0, 0), (0, 1), (1, 0), (1, 1)]
 
   get_payoffs_partial = partial(get_payoffs, commit_prior=commit_prior, cost_prior=cost_prior, low_cost=low_cost,
@@ -79,5 +81,22 @@ def create_payoff_matrix(p, c, low_cost, high_cost, commit_prior, cost_prior):
 
   return payoffs_threatener, payoffs_target
 
+
+def get_equilibria(p, c, low_cost, high_cost, commit_prior, cost_prior):
+  payoffs_threatener, payoffs_target = create_payoff_matrix(p, c, low_cost, high_cost, commit_prior, cost_prior)
+  game = nashpy.Game(payoffs_threatener, payoffs_target)
+  eqs = list(game.support_enumeration())
+  print(f'{payoffs_threatener}\n{payoffs_target}\n{eqs}')
+  return
+
+
+if __name__ == "__main__":
+  p = 0.5
+  c = 0.01
+  low_cost = 0.1
+  high_cost = 10.0
+  commit_prior = [0.5, 0.5]
+  cost_prior = [0.5, 0.5]
+  get_equilibria(p, c, low_cost, high_cost, commit_prior, cost_prior)
 
 
