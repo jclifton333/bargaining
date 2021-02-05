@@ -118,6 +118,7 @@ def cross_play(p, c, low_cost, high_cost, prior_on_commit_prior_if_committed, co
 
   total_threat_execution_probability = 0.
   total_threat_made_probability = 0.
+  cgs_total_threat_execution_probability = 0.
   prior_diffs = []
   for rep in range(reps):
     # Draw each player's priors
@@ -138,7 +139,20 @@ def cross_play(p, c, low_cost, high_cost, prior_on_commit_prior_if_committed, co
                                                                              true_cost_prior)
     total_threat_execution_probability += threat_execution_probability / reps
     total_threat_made_probability += threatener_eqs[0][1] / reps
-  return total_threat_execution_probability, total_threat_made_probability, prior_diffs
+
+    # Get outcome
+    cgs_cost_prior = (threatener_cost_prior + target_cost_prior) / 2
+    cgs_commit_prior_if_committed = (threatener_commit_prior_if_committed + target_commit_prior_if_committed) / 2
+    _, cgs_eqs = get_equilibria(p, c, low_cost, high_cost, cgs_commit_prior_if_committed,
+                                commit_prior_if_not_committed, cgs_cost_prior)
+    cgs_threat_execution_probability = threat_execution_probability_from_profile(cgs_eqs[0], cgs_eqs[1],
+                                                                                 true_commit_prior_if_committed,
+                                                                                 commit_prior_if_not_committed,
+                                                                                 true_cost_prior)
+    cgs_total_threat_execution_probability += cgs_threat_execution_probability / reps
+
+  return total_threat_execution_probability, cgs_total_threat_execution_probability, total_threat_made_probability, \
+         prior_diffs
 
 
 def get_prior_over_priors(true_prior, variance_multiplier, size=1):
@@ -154,12 +168,14 @@ def get_prior_over_priors(true_prior, variance_multiplier, size=1):
     p = np.random.beta(a=alpha, b=beta, size=size)
     if size == 1:
       p = p[0]
-    return [p, 1-p]
+    return np.array([p, 1-p])
 
   return prior_over_priors
 
 
 if __name__ == "__main__":
+  # ToDo: enforce P(commitment type | commitment) > P(commitment type | no commitment)
+  commit_prior_if_not_committed = [0.9, 0.1]
   true_commit_prior_if_committed = [0.5, 0.5]
   true_cost_prior = [0.9, 0.1]
 
@@ -176,12 +192,13 @@ if __name__ == "__main__":
   c = 0.01
   low_cost = 0.2
   high_cost = 10.
-  commit_prior_if_not_committed = [0.9, 0.1]
-  threat_prob, threat_made_prob, prior_diffs = cross_play(p, c, low_cost, high_cost, prior_on_commit_prior_if_committed,
-                                                          commit_prior_if_not_committed, prior_on_cost_prior,
-                                                          true_cost_prior,
-                                                          true_commit_prior_if_committed, reps=100)
-  print(threat_prob, threat_made_prob)
+  threat_prob, cgs_threat_prob, threat_made_prob, prior_diffs = cross_play(p, c, low_cost, high_cost,
+                                                                           prior_on_commit_prior_if_committed,
+                                                                           commit_prior_if_not_committed,
+                                                                           prior_on_cost_prior,
+                                                                           true_cost_prior,
+                                                                           true_commit_prior_if_committed, reps=100)
+  print(threat_prob, cgs_threat_prob, threat_made_prob)
   # plt.hist(prior_diffs)
   # plt.show()
 
