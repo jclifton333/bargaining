@@ -273,32 +273,84 @@ def get_prior_over_priors(true_prior, variance_multiplier, size=1):
   return prior_over_priors
 
 
+def compare_cgs_interim(commit_prior_if_not_committed=[0.9, 0.1], true_commit_prior_if_committed=[0.5, 0.5],
+                        true_cost_prior=[0.8, 0.2], commit_prior_variance_multiplier=0.5,
+                        cost_prior_variance_multiplier=0.5, p=0.5, c=0.1, low_cost=0.2, high_cost=3, reps=100):
+    # Get distributions over credences
+    prior_on_cost_prior = get_prior_over_priors(true_cost_prior, cost_prior_variance_multiplier)
+    prior_on_commit_prior_if_committed = get_prior_over_priors(true_commit_prior_if_committed,
+                                                               commit_prior_variance_multiplier)
+
+    threat_prob, cgs_threat_prob, interim, cgs_interim = cross_play(p, c, low_cost, high_cost,
+                                                                    prior_on_commit_prior_if_committed,
+                                                                    commit_prior_if_not_committed,
+                                                                    prior_on_cost_prior,
+                                                                    true_cost_prior,
+                                                                    true_commit_prior_if_committed, reps=reps)
+    cgs_better_threatener = interim[:2] <= cgs_interim[:2]
+    cgs_better_target = interim[2:] <= cgs_interim[2:]
+    return cgs_better_threatener, cgs_better_target
+
+
+def decide_whether_to_do_cgs(commit_prior_if_not_committed=[0.9, 0.1], true_commit_prior_if_committed=[0.5, 0.5],
+                             true_cost_prior=[0.8, 0.2], commit_prior_variance_multiplier=0.5,
+                             cost_prior_variance_multiplier=0.5, p=0.5, c=0.1, low_cost=0.2, high_cost=3,
+                             outer_reps=10, inner_reps=10):
+    """
+    To decide whether to do CGS,
+        1. observe your own credences
+        2. use these as the true credences in cross_play
+        3. if you do better in cross_play using CGS, then do CGS
+    # ToDo: note that this doesn't currently account for the evidence that agreeing to CGS provides about your type!
+    """
+    prior_on_cost_prior = get_prior_over_priors(true_cost_prior, cost_prior_variance_multiplier)
+    prior_on_commit_prior_if_committed = get_prior_over_priors(true_commit_prior_if_committed,
+                                                               commit_prior_variance_multiplier)
+
+    proportion_threatener_cgs = np.zeros(2)
+    proportion_target_cgs = np.zeros(2)
+    proportion_cgs = np.zeros((2, 2))
+    for rep in range(outer_reps):
+        print(rep)
+        # Draw threatener credences
+        threatener_sampled_commit_prior_if_committed = prior_on_commit_prior_if_committed()
+        threatener_sampled_cost_prior = prior_on_cost_prior()
+
+        # Get threatner cross-play comparison
+        cgs_better_threatener, _ = \
+            compare_cgs_interim(commit_prior_if_not_committed=commit_prior_if_not_committed,
+                                true_commit_prior_if_committed=threatener_sampled_commit_prior_if_committed,
+                                true_cost_prior=threatener_sampled_cost_prior,
+                                commit_prior_variance_multiplier=commit_prior_variance_multiplier,
+                                cost_prior_variance_multiplier=cost_prior_variance_multiplier,
+                                p=p, c=c, low_cost=low_cost, high_cost=high_cost, reps=inner_reps)
+
+        # Draw target credences
+        target_sampled_commit_prior_if_committed = prior_on_commit_prior_if_committed()
+        target_sampled_cost_prior = prior_on_cost_prior()
+
+        # Get target cross-play comparison
+        _, cgs_better_target = \
+            compare_cgs_interim(commit_prior_if_not_committed=commit_prior_if_not_committed,
+                                true_commit_prior_if_committed=target_sampled_commit_prior_if_committed,
+                                true_cost_prior=target_sampled_cost_prior,
+                                commit_prior_variance_multiplier=commit_prior_variance_multiplier,
+                                cost_prior_variance_multiplier=cost_prior_variance_multiplier,
+                                p=p, c=c, low_cost=low_cost, high_cost=high_cost, reps=inner_reps)
+
+        # Which type profiles do CGS?
+        proportion_target_cgs += cgs_better_target / outer_reps
+        proportion_threatener_cgs += cgs_better_threatener / outer_reps
+        proportion_cgs += np.outer(cgs_better_threatener, cgs_better_target) / outer_reps
+
+    return proportion_threatener_cgs, proportion_target_cgs, proportion_cgs
+
+
+
 if __name__ == "__main__":
   # ToDo: enforce P(commitment type | commitment) > P(commitment type | no commitment)
-  commit_prior_if_not_committed = [0.9, 0.1]
-  true_commit_prior_if_committed = [0.5, 0.5]
-  true_cost_prior = [0.8, 0.2]
-
-  commit_prior_variance_multiplier = 0.5  # Must be < 1
-  cost_prior_variance_multiplier = 0.5
-
-  # Get distributions over credences
-  prior_on_cost_prior = get_prior_over_priors(true_cost_prior, cost_prior_variance_multiplier)
-  prior_on_commit_prior_if_committed = get_prior_over_priors(true_commit_prior_if_committed,
-                                                             commit_prior_variance_multiplier)
-
-  p = 0.5
-  c = 0.01
-  low_cost = 0.2
-  high_cost = 3
-  threat_prob, cgs_threat_prob, interim, cgs_interim = cross_play(p, c, low_cost, high_cost,
-                                                                  prior_on_commit_prior_if_committed,
-                                                                  commit_prior_if_not_committed,
-                                                                  prior_on_cost_prior,
-                                                                  true_cost_prior,
-                                                                  true_commit_prior_if_committed, reps=1000)
-  print(threat_prob, cgs_threat_prob, interim, cgs_interim)
-  # plt.hist(prior_diffs)
-  # plt.show()
-
-
+  p_th, p_ta, p = decide_whether_to_do_cgs(commit_prior_if_not_committed=[0.9, 0.1], true_commit_prior_if_committed=[0.5, 0.5],
+                                    true_cost_prior=[0.8, 0.2], commit_prior_variance_multiplier=0.5,
+                                    cost_prior_variance_multiplier=0.5, p=0.5, c=0.2, low_cost=0.2, high_cost=1.0,
+                                    outer_reps=10, inner_reps=1000)
+  print(p_th, p_ta, p)

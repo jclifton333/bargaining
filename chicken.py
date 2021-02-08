@@ -2,28 +2,30 @@ import numpy as np
 import nashpy as nash
 from nash_unif import get_nash_welfare_optimal_eq, get_welfare_optimal_eq
 import copy
+import pdb
 
 
-CRASH = -10
-G_1 = np.array([[0, -1], [2, CRASH]])
-G_2 = np.array([[0, 2], [-1, CRASH]])
+CRASH = -5.
+G_1 = np.array([[0., -1.], [2., CRASH]])
+G_2 = np.array([[0., 2.], [-1., CRASH]])
 
 
 def draw_chicken_game(sd=0.5):
     G_1_draw = copy.copy(G_1)
     G_2_draw = copy.copy(G_2)
-    G_1_draw[1, 0] += np.random.normal(scale=sd)
-    G_2_draw[1, 0] += np.random.normal(scale=sd)
-
+    perturbation_1 = np.array([[0., 0.], [np.random.normal(scale=sd), 0]])
+    perturbation_2 = np.array([[0., 0.], [np.random.normal(scale=sd), 0]])
+    G_1_draw += perturbation_1
+    G_2_draw += perturbation_2
     return G_1_draw, G_2_draw
 
 
 def combine_reports(G_1_rep, G_2_rep, sd=0.5):
-    diff = np.abs(G_1_rep[0, 1] - G_2_rep[0, 1])
-    if diff < 2*sd:
-       return True, (G_1_rep + G_2_rep) / 2
+    diff = np.abs(G_1_rep[1, 0] - G_2_rep[1, 0])
+    if diff < 8*sd:
+        return True, (G_1_rep + G_2_rep) / 2
     else:
-       return False, None
+        return False, None
 
 
 def evaluate_reporting_policy_profile(distort_1, distort_2, sd=0.5, nrep=100):
@@ -32,13 +34,15 @@ def evaluate_reporting_policy_profile(distort_1, distort_2, sd=0.5, nrep=100):
     v1_default_mean = 0.
     v2_default_mean = 0.
     true_game = nash.Game(G_1, G_2)
+    prop_agree = 0.
     for rep in range(nrep):
         G_1_private, G_2_private = draw_chicken_game(sd=sd)
         G_1_rep = copy.copy(G_1_private)
         G_2_rep = copy.copy(G_2_private)
-        G_1_rep[0, 1] += distort_1
-        G_2_rep[0, 1] += distort_2
-        combine, combined_game = combine_reports(G_1_rep, G_2_rep)
+        G_1_rep[1, 0] += distort_1
+        G_2_rep[1, 0] += distort_2
+        combine, combined_game = combine_reports(G_1_rep, G_2_rep, sd=sd)
+        prop_agree += combine / nrep
 
         a1_default, _, _ = get_welfare_optimal_eq(nash.Game(G_1_rep, G_2))
         _, a2_default, _ = get_welfare_optimal_eq(nash.Game(G_2_rep, G_2))
@@ -53,10 +57,24 @@ def evaluate_reporting_policy_profile(distort_1, distort_2, sd=0.5, nrep=100):
         v1, v2 = true_game[(a1, a2)]
         v1_mean += v1 / nrep
         v2_mean += v2 / nrep
-    return v1_mean, v2_mean, v1_default_mean, v2_default_mean
+    return v1_mean, v2_mean, v1_default_mean, v2_default_mean, prop_agree
 
 
 if __name__ == "__main__":
-    v1_mean, v2_mean, v1_default_mean, v2_default_mean = evaluate_reporting_policy_profile(0, 0)
-    print(f'{v1_mean}, {v2_mean}\n{v1_default_mean}, {v2_default_mean}')
-
+    sd = 0.5
+    payoffs_1 = np.zeros((4, 4))
+    payoffs_2 = np.zeros((4, 4))
+    for i, distort_1 in enumerate(np.linspace(0, sd/2, 4)):
+        for j, distort_2 in enumerate(np.linspace(0, sd / 4, 4)):
+            v1, v2, v1_default, v2_default, prop_agree = evaluate_reporting_policy_profile(distort_1, -distort_2,
+                                                                                           nrep=1000)
+            payoffs_1[i, j] = v1
+            payoffs_2[i, j] = v2
+            if i == 0 and j == 0:
+               print(f'default: {v1_default}, {v2_default}')
+    g = nash.Game(payoffs_1, payoffs_2)
+    a1, a2, _ = get_welfare_optimal_eq(g)
+    print(payoffs_1)
+    print(payoffs_2)
+    print(a1, a2)
+    print(g[(a1, a2)])
