@@ -118,8 +118,6 @@ def get_equilibria(p, c, low_cost, high_cost, commit_prior_if_committed, commit_
 
 def target_best_response(action_threatener, commit_prior, p, c, low_cost, high_cost, cost_prior):
 
-  # ToDo: is the signal business necessary? Can we just increase the prior?
-
   p_carry_out = commit_prior[1]
 
   # Get best response for target
@@ -349,8 +347,8 @@ def decide_whether_to_do_cgs(commit_prior_if_not_committed=[0.9, 0.1], true_comm
 
 if __name__ == "__main__":
   # ToDo: enforce P(commitment type | commitment) > P(commitment type | no commitment)
-  p_th, p_ta, p = decide_whether_to_do_cgs(commit_prior_if_not_committed=[0.9, 0.1], true_commit_prior_if_committed=[0.5, 0.5],
-                                    true_cost_prior=[0.8, 0.2], commit_prior_variance_multiplier=0.5,
-                                    cost_prior_variance_multiplier=0.5, p=0.5, c=0.2, low_cost=0.2, high_cost=1.0,
-                                    outer_reps=10, inner_reps=1000)
+  p_th, p_ta, p = decide_whether_to_do_cgs(commit_prior_if_not_committed=[0.9, 0.1], true_commit_prior_if_committed=[0.4, 0.6],
+                                    true_cost_prior=[0.8, 0.2], commit_prior_variance_multiplier=0.1,
+                                    cost_prior_variance_multiplier=0.1, p=0.3, c=0.001, low_cost=0.2, high_cost=3,
+                                    outer_reps=20, inner_reps=1000)
   print(p_th, p_ta, p)
