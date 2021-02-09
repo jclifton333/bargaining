@@ -308,8 +308,10 @@ def decide_whether_to_do_cgs(commit_prior_if_not_committed=[0.9, 0.1], true_comm
     proportion_threatener_cgs = np.zeros(2)
     proportion_target_cgs = np.zeros(2)
     proportion_cgs = np.zeros((2, 2))
+    default_proportion_threat_executed = np.zeros((2, 2))
+    cgs_proportion_threat_executed = np.zeros((2, 2))
+    # ToDo: check these calculations, it feels fishy that CGS is consistently leading to better outcomes
     for rep in range(outer_reps):
-        print(rep)
         # Draw threatener credences
         threatener_sampled_commit_prior_if_committed = prior_on_commit_prior_if_committed()
         threatener_sampled_cost_prior = prior_on_cost_prior()
@@ -336,11 +338,44 @@ def decide_whether_to_do_cgs(commit_prior_if_not_committed=[0.9, 0.1], true_comm
                                 cost_prior_variance_multiplier=cost_prior_variance_multiplier,
                                 p=p, c=c, low_cost=low_cost, high_cost=high_cost, reps=inner_reps)
 
+        # Get non-CGS outcome
+        threatener_n, threatener_c, _, _ = get_sequential_equilibrium(p, c, low_cost, high_cost,
+                                                                      threatener_sampled_commit_prior_if_committed,
+                                                                      commit_prior_if_not_committed,
+                                                                      threatener_sampled_cost_prior)
+
+        _, _, target_l, target_h = get_sequential_equilibrium(p, c, low_cost, high_cost,
+                                                              target_sampled_commit_prior_if_committed,
+                                                              commit_prior_if_not_committed,
+                                                              target_sampled_cost_prior)
+
+
+        # Get CGS outcome
+        cgs_cost_prior = (threatener_sampled_cost_prior + target_sampled_cost_prior) / 2
+        cgs_commit_prior_if_committed = (threatener_sampled_commit_prior_if_committed +
+                                         target_sampled_commit_prior_if_committed) / 2
+        threatener_n_cgs, threatener_c_cgs, target_l_cgs, target_h_cgs = \
+          get_sequential_equilibrium(p, c, low_cost, high_cost,
+                                     cgs_commit_prior_if_committed,
+                                     commit_prior_if_not_committed,
+                                     cgs_cost_prior)
+
+        # Get threat executions
+        cgs_profiles = np.outer(cgs_better_threatener, cgs_better_target)
+        default_threat_executions = np.outer(np.array([threatener_n, threatener_c]),
+                                             np.array([target_l, target_h]))
+        cgs_threat_executions = np.outer(np.array([threatener_n_cgs, threatener_c_cgs]),
+                                     np.array([target_l_cgs, target_h_cgs]))
+        cgs_threat_executions = cgs_profiles * cgs_threat_executions + (1 - cgs_profiles) * default_threat_executions
+        cgs_proportion_threat_executed += cgs_threat_executions / outer_reps
+        default_proportion_threat_executed += default_threat_executions / outer_reps
+
         # Which type profiles do CGS?
         proportion_target_cgs += cgs_better_target / outer_reps
         proportion_threatener_cgs += cgs_better_threatener / outer_reps
-        proportion_cgs += np.outer(cgs_better_threatener, cgs_better_target) / outer_reps
+        proportion_cgs += cgs_profiles / outer_reps
 
+    print(f'default: {default_proportion_threat_executed}\ncgs: {cgs_proportion_threat_executed}')
     return proportion_threatener_cgs, proportion_target_cgs, proportion_cgs
 
 
@@ -349,6 +384,6 @@ if __name__ == "__main__":
   # ToDo: enforce P(commitment type | commitment) > P(commitment type | no commitment)
   p_th, p_ta, p = decide_whether_to_do_cgs(commit_prior_if_not_committed=[0.9, 0.1], true_commit_prior_if_committed=[0.4, 0.6],
                                     true_cost_prior=[0.8, 0.2], commit_prior_variance_multiplier=0.1,
-                                    cost_prior_variance_multiplier=0.1, p=0.3, c=0.001, low_cost=0.2, high_cost=3,
-                                    outer_reps=20, inner_reps=1000)
+                                    cost_prior_variance_multiplier=0.1, p=0.6, c=0.001, low_cost=0.2, high_cost=3,
+                                    outer_reps=50, inner_reps=100)
   print(p_th, p_ta, p)
