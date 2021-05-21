@@ -14,7 +14,7 @@ def decisive_conflict_rep(p_fail_list, p_threat, D_list, T):
         u = D_list[t]
       else:
         u = 0
-    break
+      break
   return u
 
 
