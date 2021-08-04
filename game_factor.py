@@ -33,7 +33,7 @@ def extract_additive_matrices_from_parameter(beta, nA1, nA2):
   return player_1_matrix, player_2_matrix
 
 
-def fit_additive_approx_with_solver(U1, U2):
+def fit_additive_approx_with_solver(U1, U2, weight=1.):
   nA1, nA2 = U1.shape
   nA = nA1 * nA2
 
@@ -59,17 +59,20 @@ def fit_additive_approx_with_solver(U1, U2):
                       for j in range(nA2))
   model.add_kpi(cost2, 'cost2')
 
-  model.minimize(cost1 + cost2)
+  cost3 = model.sum(vars[2, i, j]**2 for i in range(nA1) for j in range(nA2))
+
+  model.minimize(cost1 + cost2 + weight*cost3)
   sol = model.solve(url=None, key=None)
 
   # Get variables
-  U11_hat = np.zeros_like(U1)
-  U12_hat = np.zeros_like(U1)
-  U1_hat = np.zeros_like(U1)
+  U11_hat = np.zeros_like(U1).astype(float)
+  U12_hat = np.zeros_like(U1).astype(float)
+  U1_hat = np.zeros_like(U1).astype(float)
 
   for i in range(nA1):
     for j in range(nA2):
-      U11_hat[i, j] = float(sol.get_value(f'{(0, 0, i)}'))
+      u11_hat_ij = float(sol.get_value(f'{(0, 0, i)}'))
+      U11_hat[i, j] = u11_hat_ij
       U12_hat[i, j] = float(sol.get_value(f'{(0, 1, j)}'))
       U1_hat[i, j] = float(sol.get_value(f'{(2, i, j)}'))
 
@@ -120,5 +123,6 @@ if __name__ == "__main__":
   bpm2 = np.array([[2, 1], [1, 0]])
 
   ipd_bpm1 = np.array([[3, 2, 2, 1], [2, 1, 1, 0], [2, 1, 2, 1], [1, 0, 1, 0]])
+  ipd_bpm2 = np.array([[3, 2, 2, 1], [2, 1, 1, 0], [2, 1, 2, 1], [1, 0, 1, 0]])
 
-  U11_hat, U12_hat, U1_hat = fit_additive_approx_with_solver(bpm1, bpm2)
+  U11_hat, U12_hat, U1_hat = fit_additive_approx_with_solver(ipd_bpm1, ipd_bpm2, weight=2.)
