@@ -55,7 +55,7 @@ def fit_additive_approx_with_solver(U1, U2, weight=1.):
                       for j in range(nA2))
   model.add_kpi(cost1, 'cost1')
 
-  cost2 = model.sum( (U2[i, j] - vars[(1, 0, i)] - vars[(1, 1, j)] - vars[(2, i, j)])**2 for i in range(nA1)
+  cost2 = model.sum( (U2[i, j] - vars[(1, 1, i)] - vars[(1, 0, j)] - vars[(2, i, j)])**2 for i in range(nA1)
                       for j in range(nA2))
   model.add_kpi(cost2, 'cost2')
 
@@ -67,17 +67,19 @@ def fit_additive_approx_with_solver(U1, U2, weight=1.):
   # Get variables
   U11_hat = np.zeros_like(U1).astype(float)
   U12_hat = np.zeros_like(U1).astype(float)
+  U21_hat = np.zeros_like(U1).astype(float)
+  U22_hat = np.zeros_like(U1).astype(float)
   U1_hat = np.zeros_like(U1).astype(float)
 
   for i in range(nA1):
     for j in range(nA2):
-      u11_hat_ij = float(sol.get_value(f'{(0, 0, i)}'))
-      U11_hat[i, j] = u11_hat_ij
+      U11_hat[i, j] = float(sol.get_value(f'{(0, 0, i)}'))
       U12_hat[i, j] = float(sol.get_value(f'{(0, 1, j)}'))
+      U21_hat[i, j] = float(sol.get_value(f'{(1, 0, i)}'))
+      U22_hat[i, j] = float(sol.get_value(f'{(1, 1, j)}'))
       U1_hat[i, j] = float(sol.get_value(f'{(2, i, j)}'))
 
-  pdb.set_trace()
-  return U11_hat, U12_hat, U1_hat
+  return U11_hat, U12_hat, U21_hat, U22_hat, U1_hat
 
 
 def fit_additive_approximation(U1, U2):
@@ -125,4 +127,4 @@ if __name__ == "__main__":
   ipd_bpm1 = np.array([[3, 2, 2, 1], [2, 1, 1, 0], [2, 1, 2, 1], [1, 0, 1, 0]])
   ipd_bpm2 = np.array([[3, 2, 2, 1], [2, 1, 1, 0], [2, 1, 2, 1], [1, 0, 1, 0]])
 
-  U11_hat, U12_hat, U1_hat = fit_additive_approx_with_solver(ipd_bpm1, ipd_bpm2, weight=2.)
+  U11_hat, U12_hat, U21_hat, U22_hat, U1_hat = fit_additive_approx_with_solver(ipd_bpm1, ipd_bpm2, weight=0.001)
