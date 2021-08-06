@@ -2,6 +2,7 @@ import docplex.mp
 import docplex.mp.model as dcpm
 import numpy as np
 import pdb
+np.set_printoptions(precision=2, suppress=True)
 
 
 def joint_action_metric(Ui, i, j):
@@ -33,7 +34,7 @@ def extract_additive_matrices_from_parameter(beta, nA1, nA2):
   return player_1_matrix, player_2_matrix
 
 
-def fit_additive_approx_with_solver(U1, U2, weight=1.):
+def fit_additive_approx_with_solver(U1, U2, weight=1., residual_weight=1.):
   nA1, nA2 = U1.shape
   nA = nA1 * nA2
 
@@ -44,22 +45,33 @@ def fit_additive_approx_with_solver(U1, U2, weight=1.):
   # Add variables for each player
   for i in range(nA1):
     vars[(0, 0, i)] = model.continuous_var(name=f'{(0, 0, i)}', lb=0)
-    vars[(1, 0, i)] = model.continuous_var(name=f'{(1, 0, i)}', lb=0)
+    vars[(1, 0, i)] = model.continuous_var(name=f'{(1, 0, i)}')
     for j in range(nA2):
       if i == 0:
         vars[(0, 1, j)] = model.continuous_var(name=f'{(0, 1, j)}', lb=0)
         vars[(1, 1, j)] = model.continuous_var(name=f'{(1, 1, j)}', lb=0)
       vars[(2, i, j)] = model.continuous_var(name=f'{(2, i, j)}', lb=0)
+      # vars[(3, i, j)] = model.continuous_var(name=f'{(3, i, j)}', lb=0)
+      # vars[(4, i, j)] = model.continuous_var(name=f'{(4, i, j)}', lb=0)
+
+      # Dummy variables for l1 penalty
+      vars[(5, i, j)] = model.continuous_var(name=f'{(5, i, j)}', lb=0)
+      vars[(6, i, j)] = model.continuous_var(name=f'{(6, i, j)}', lb=0)
 
   cost1 = model.sum( (U1[i, j] - vars[(0, 0, i)] - vars[(0, 1, j)] - vars[(2, i, j)])**2 for i in range(nA1)
                       for j in range(nA2))
-  model.add_kpi(cost1, 'cost1')
-
   cost2 = model.sum( (U2[i, j] - vars[(1, 1, i)] - vars[(1, 0, j)] - vars[(2, i, j)])**2 for i in range(nA1)
                       for j in range(nA2))
-  model.add_kpi(cost2, 'cost2')
 
-  cost3 = model.sum(vars[2, i, j]**2 for i in range(nA1) for j in range(nA2))
+  # cost3 = model.sum(vars[2, i, j]**2 for i in range(nA1) for j in range(nA2))
+  cost3 = model.sum(vars[5, i, j] + vars[6, i, j] for i in range(nA1) for j in range(nA2))
+  # cost4 = model.sum(vars[3, i, j]**2 for i in range(nA1) for j in range(nA2))
+  # cost5 = model.sum(vars[4, i, j] ** 2 for i in range(nA1) for j in range(nA2))
+
+  # Constraints for l1 dummy variables
+  for i in range(nA1):
+    for j in range(nA2):
+      model.add_constraint(vars[5, i, j] - vars[6, i, j] - vars[2, i, j] == 0)
 
   model.minimize(cost1 + cost2 + weight*cost3)
   sol = model.solve(url=None, key=None)
@@ -127,4 +139,11 @@ if __name__ == "__main__":
   ipd_bpm1 = np.array([[3, 2, 2, 1], [2, 1, 1, 0], [2, 1, 2, 1], [1, 0, 1, 0]])
   ipd_bpm2 = np.array([[3, 2, 2, 1], [2, 1, 1, 0], [2, 1, 2, 1], [1, 0, 1, 0]])
 
-  U11_hat, U12_hat, U21_hat, U22_hat, U1_hat = fit_additive_approx_with_solver(ipd_bpm1, ipd_bpm2, weight=0.001)
+  cg1 = np.array([[0, 0, 2, 2], [0, 1, 2, 2], [0, 0, 0, 0], [0, 0, 0, 1]])
+  cg2 = np.array([[0, 0, 0, 0], [0, 1, 0, 0], [2, 2, 0, 0], [2, 2, 0, 1]])
+
+  U11_hat, U12_hat, U21_hat, U22_hat, U1_hat = fit_additive_approx_with_solver(bpm1, bpm2, weight=0.01,
+                                                                               residual_weight=0.0)
+  print(U11_hat)
+  print(U1_hat)
+  print(U11_hat + U12_hat + U1_hat)

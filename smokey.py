@@ -3,6 +3,20 @@ import matplotlib.pyplot as plt
 import pdb
 
 
+def probs_from_expert_survey():
+  catastrophe_prob = 0.49 / (0.49 + 1.72)
+  war_dbn = catastrophe_prob * 2 * np.random.beta(0.96, 6, size=1000)
+  singleton_dbn = catastrophe_prob * np.random.beta(0.96, 6, size=1000)
+
+  war_quantiles = np.percentile(war_dbn, [1, 25, 50, 75, 99])
+  singleton_quantiles = np.percentile(singleton_dbn, [1, 25, 50, 99])
+
+  hazard_model_war= np.random.beta(0.96, 7.58, size=1000)
+  war_combined_quantiles = np.percentile(np.concatenate((war_dbn, hazard_model_war)), [1, 25, 50, 75, 99])
+
+  print(f'war: {war_quantiles}\nsingleton: {singleton_quantiles}\nwar merged: {war_combined_quantiles}')
+
+
 def decisive_conflict_hazard_model(alpha_hazard_rate=0.87, beta_hazard_rate=53.45):
   # For default using median=0.01 and 95 percentile=0.05 in Nix calculator https://observablehq.com/@ngd/beta-distributions
 
@@ -31,16 +45,17 @@ def late_conflict_probs():
 
 
 if __name__ == "__main__":
-  central_params = (0.87, 53.45)
+  # central_params = (0.87, 53.45)
 
-  # params for ad-hoc sensitivity analysis
-  sensitivity_params = [central_params,
-                        (1.41, 106.75),  # Median=0.01, 99 percentile=0.05
-                        (0.5, 53.45)]    # Median=0.004, 95 percentile=0.04
+  # # params for ad-hoc sensitivity analysis
+  # sensitivity_params = [central_params,
+  #                       (1.41, 106.75),  # Median=0.01, 99 percentile=0.05
+  #                       (0.5, 53.45)]    # Median=0.004, 95 percentile=0.04
 
-  for a, b in sensitivity_params:
-    dbn = decisive_conflict_hazard_model(alpha_hazard_rate=a, beta_hazard_rate=b)
-    # plt.hist(dbn, alpha=0.5)
-    print(np.percentile(dbn, [1, 50, 99]))
+  # for a, b in sensitivity_params:
+  #   dbn = decisive_conflict_hazard_model(alpha_hazard_rate=a, beta_hazard_rate=b)
+  #   # plt.hist(dbn, alpha=0.5)
+  #   print(np.percentile(dbn, [1, 50, 99]))
   # plt.show()
+  probs_from_expert_survey()
 
