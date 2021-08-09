@@ -44,12 +44,12 @@ def fit_additive_approx_with_solver(U1, U2, weight=1., residual_weight=1.):
 
   # Add variables for each player
   for i in range(nA1):
-    vars[(0, 0, i)] = model.continuous_var(name=f'{(0, 0, i)}', lb=0)
+    vars[(0, 0, i)] = model.continuous_var(name=f'{(0, 0, i)}', lb=-2)
     vars[(1, 0, i)] = model.continuous_var(name=f'{(1, 0, i)}')
     for j in range(nA2):
       if i == 0:
-        vars[(0, 1, j)] = model.continuous_var(name=f'{(0, 1, j)}', lb=0)
-        vars[(1, 1, j)] = model.continuous_var(name=f'{(1, 1, j)}', lb=0)
+        vars[(0, 1, j)] = model.continuous_var(name=f'{(0, 1, j)}', lb=-2)
+        vars[(1, 1, j)] = model.continuous_var(name=f'{(1, 1, j)}', lb=-2)
       vars[(2, i, j)] = model.continuous_var(name=f'{(2, i, j)}', lb=0)
       # vars[(3, i, j)] = model.continuous_var(name=f'{(3, i, j)}', lb=0)
       # vars[(4, i, j)] = model.continuous_var(name=f'{(4, i, j)}', lb=0)
@@ -142,8 +142,8 @@ if __name__ == "__main__":
   cg1 = np.array([[0, 0, 2, 2], [0, 1, 2, 2], [0, 0, 0, 0], [0, 0, 0, 1]])
   cg2 = np.array([[0, 0, 0, 0], [0, 1, 0, 0], [2, 2, 0, 0], [2, 2, 0, 1]])
 
-  U11_hat, U12_hat, U21_hat, U22_hat, U1_hat = fit_additive_approx_with_solver(bpm1, bpm2, weight=0.01,
+  U11_hat, U12_hat, U21_hat, U22_hat, U1_hat = fit_additive_approx_with_solver(cg1, cg2, weight=1,
                                                                                residual_weight=0.0)
-  print(U11_hat)
+  print(U21_hat)
   print(U1_hat)
-  print(U11_hat + U12_hat + U1_hat)
+  print(U21_hat + U22_hat + U1_hat)
