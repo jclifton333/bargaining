@@ -3,6 +3,46 @@ import matplotlib.pyplot as plt
 import pdb
 
 
+def pilot_model_helper(n_rep, early_scenario_probs_dbn, late_scenario_probs_dbn, late_disvalue_mean):
+  disvalue = 0.
+  for rep in range(N_REP):
+    early_scenario_probs = early_scenario_probs_dbn()
+    early_scenario = np.random.multinomial(n=1, pvals=early_scenario_probs)
+    if early_scenario == 0:  # Early competition
+      disvalue += 1 / N_REP
+    elif early_scenario == 3:  # Move to late period
+      late_scenario_probs = late_scenario_probs_dbn()
+      late_scenario = np.random.binomial(1, late_scenario_probs)
+      if late_scenario == 0:
+        disvalue += late_disvalue_mean / N_REP
+
+  return disvalue
+
+
+def pilot_model():
+  N_REP = 1000
+
+  # Baseline
+  early_scenario_probs_dbn_ = None
+  late_scenario_probs_dbn_ = None
+  late_disvalue_mean_ = None
+
+  baseline_disvalue = pilot_model_helper(N_REP, early_scenario_probs_dbn_, late_scenario_probs_dbn_,
+                                         late_disvalue_mean_)
+
+  # With coopAI
+  early_scenario_probs_dbn_cai = None
+  late_scenario_probs_dbn_cai = None
+  late_disvalue_mean_cai = None
+
+  coopai_disvalue = pilot_model_helper(N_REP, early_scenario_probs_dbn_cai, late_scenario_probs_dbn_cai,
+                                       late_disvalue_mean_cai)
+
+  diff = baseline_disvalue - coopai_disvalue
+
+  return
+
+
 def probs_from_expert_survey():
   catastrophe_prob = 0.49 / (0.49 + 1.72)
   war_dbn = catastrophe_prob * 2 * np.random.beta(0.96, 6, size=1000)
