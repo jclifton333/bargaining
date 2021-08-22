@@ -1,5 +1,7 @@
 import numpy as np
 import pdb
+from sklearn import decomposition
+from scipy.stats import pearsonr
 
 
 def generate_tc_cross_pd_matrix(social_dilemma_weight=1., tc_bonus=1., tc_byproduct=0.):
@@ -47,8 +49,8 @@ if __name__ == "__main__":
   np.random.seed(3)
 
   # Generate policies
-  pi1_list = np.random.uniform(low=0, high=1, size=(12, 2))
-  pi2_list = np.random.uniform(low=0, high=1, size=(12, 2))
+  pi1_list = np.random.beta(0.2, 0.2, size=(20, 2))
+  pi2_list = np.random.beta(0.2, 0.2, size=(20, 2))
 
   # Two clusters: small tc and large cc component; large tc and small cc component
   num_envs_to_generate = 6
@@ -75,6 +77,10 @@ if __name__ == "__main__":
 
   # Construct feature matrix
   X = np.zeros((0, 2*num_envs_to_generate))
+  phigh1 = np.array([])
+  phigh2 = np.array([])
+  pcoop1 = np.array([])
+  pcoop2 = np.array([])
   for pi1 in pi1_list:
     for pi2 in pi2_list:
       x = np.zeros(0)
@@ -82,7 +88,13 @@ if __name__ == "__main__":
         ev1, ev2 = get_type1_policy_payoffs(u1, u2, pi1, pi2)
         x = np.hstack((x, [ev1, ev2]))
       X = np.vstack((X, x))
+      phigh1 = np.append(phigh1, pi1[0])
+      phigh2 = np.append(phigh2, pi2[0])
+      pcoop1 = np.append(pcoop1, pi1[1])
+      pcoop2 = np.append(pcoop2, pi2[1])
 
-
+  pca = decomposition.PCA(n_components=4)
+  pca.fit(X)
+  Y = pca.transform(X)
 
 
