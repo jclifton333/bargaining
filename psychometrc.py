@@ -57,19 +57,21 @@ if __name__ == "__main__":
   u1_list = []
   u2_list = []
 
+  scale = 2
+
   for _ in range(num_envs_to_generate // 2):
-    social_dilemma_weight = np.random.gamma(shape=1, scale=1)
-    tc_bonus = np.random.gamma(shape=0.01, scale=1)
-    tc_byproduct = np.random.gamma(shape=0.01, scale=1)
+    social_dilemma_weight = np.random.gamma(shape=1 / scale, scale=scale)
+    tc_bonus = np.random.gamma(shape=0.01 / scale, scale=scale)
+    tc_byproduct = np.random.gamma(shape=0.01 / scale, scale=scale)
     u1, u2 = generate_tc_cross_pd_matrix(social_dilemma_weight=social_dilemma_weight, tc_bonus=tc_bonus,
                                          tc_byproduct=tc_byproduct)
     u1_list.append(u1)
     u2_list.append(u2)
 
   for _ in range(num_envs_to_generate // 2):
-    social_dilemma_weight = np.random.gamma(shape=0.01, scale=1)
-    tc_bonus = np.random.gamma(shape=1, scale=1)
-    tc_byproduct = np.random.gamma(shape=1, scale=1)
+    social_dilemma_weight = np.random.gamma(shape=0.01 / scale, scale=scale)
+    tc_bonus = np.random.gamma(shape=1 / scale, scale=scale)
+    tc_byproduct = np.random.gamma(shape=1 / scale, scale=scale)
     u1, u2 = generate_tc_cross_pd_matrix(social_dilemma_weight=social_dilemma_weight, tc_bonus=tc_bonus,
                                          tc_byproduct=tc_byproduct)
     u1_list.append(u1)
