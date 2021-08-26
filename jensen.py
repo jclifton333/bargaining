@@ -11,7 +11,8 @@ if __name__ == "__main__":
   base_prob = 10**-5
   for noise_ix, noise_multiplier in enumerate(noise_multipliers):
     for replicate_ix in range(100):
-      base_logit = logit(base_prob)
+      base_logit = logit(base_prob) + np.random.normal(loc=expected_effect, scale=0.01, size=10000)
+      expected_base_prob = np.mean(expit(base_logit))
       noisy_logits = base_logit + np.random.normal(loc=expected_effect, scale=noise_multiplier, size=10000)
       expected_improvement = np.mean(expit(noisy_logits)) / base_prob
       results[99-noise_ix, replicate_ix] = expected_improvement
@@ -23,6 +24,6 @@ if __name__ == "__main__":
   ratios = results.mean(axis=1)
   plt.plot(noise, ratios)
   plt.hlines(1, noise.min(), noise.max(), linestyles='dashed')
-  plt.xlabel(r'Noise-to-signal ratio $\sigma / \delta$')
-  plt.ylabel(r'$\mathbb{E}$[post-intervention probability] / default probability')
+  plt.xlabel(r'Noise-to-signal ratio $\sigma_{\Delta} / \delta$')
+  plt.ylabel(r'$\mathbb{E}$[post-intervention prob] / $\mathbb{E}$[pre-intervention prob]')
   plt.show()
