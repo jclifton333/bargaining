@@ -142,12 +142,6 @@ def generate_data_and_pca(policy_type=2):
   # sns.heatmap(corr_subset)
   # plt.show()
 
-  x = X[:, 4]
-  m = LinearRegression()
-  m.fit(Y[:, :3], x)
-  print(m.coef_)
-  print(m.score(Y[:, :3], x))
-
   return X_holdout, X, Y, pca
 
 

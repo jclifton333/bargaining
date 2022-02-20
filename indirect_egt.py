@@ -8,6 +8,43 @@ import matplotlib.pyplot as plt
 # with rational and behavioral types.
 
 
+def level_k_action(my_pref, their_pref_estimate, k, m):
+  """
+  Ge level-2 action, where I best-respond to a model of the other player (given by their_pref_estimate)
+  who is best-responding to my Nash strategy.
+  """
+  level0 = m / (2-k)
+  br_to_level0 = subjective_best_response(level0, their_pref_estimate, k, m)
+  br_to_br_to_level0 = subjective_best_response(br_to_level0, my_pref, k, m)
+  return br_to_br_to_level0
+
+
+def level_k_solve_for_preference(their_action, k, m):
+  """
+  Infer what the other player's preference is, given their action and the assumption they model me
+  as playing Nash.
+  """
+  their_pref_estimate = (their_action - 0.25 - k*m / (4-2*k)) * (4-2*k) / (k*m)
+  return their_pref_estimate
+
+
+def level_k_interact(a, b, ahat, bhat, k, m, num_timesteps=30):
+  mean_fitness_1 = 0.
+  mean_fitness_2 = 0.
+  for t in range(num_timesteps):
+    x = level_k_action(a, bhat, k, m) # ToDo: use distribution instead of point estimate?
+    y = level_k_action(b, ahat, k, m)
+    new_ahat = level_k_solve_for_preference(x, k, m)
+    new_bhat = level_k_solve_for_preference(y, k, m)
+    ahat = ahat + (new_ahat - ahat) / (t + 2)
+    bhat = bhat + (new_bhat - bhat) / (t + 2)
+    f1 = oligopoly_fitness(x, y, k, m)
+    f2 = oligopoly_fitness(y, x, k, m)
+    mean_fitness_1 = mean_fitness_1 + (f1 - mean_fitness_1) / (t + 1)
+    mean_fitness_2 = mean_fitness_2 + (f2 - mean_fitness_2) / (t + 1)
+  return mean_fitness_1, mean_fitness_2
+
+
 def oligopoly_fitness(my_action, their_action, k, m):
   f = my_action*(their_action*k + m - my_action)
   return f
@@ -26,7 +63,7 @@ def subjective_best_response(their_action, my_pref, k, m):
   return br
 
 
-def interact(agent1, agent2, k, m, behavior_cost=0.2):
+def interact(agent1, agent2, k, m, behavior_cost=0.2, rational_level_k=True):
   """
   Agents are tuples (bool, strategy), where
     bool = 0 indicates behavioral type, and strategy is an action in the base game.
@@ -36,7 +73,13 @@ def interact(agent1, agent2, k, m, behavior_cost=0.2):
   strategy1, strategy2 = agent1[1], agent2[1]
 
   if rational1 and rational2:
-    f1, f2, action1, action2 = fitness_rational_types(strategy1, strategy2, k, m)
+    if rational_level_k:
+      action1 = 0
+      ahat = np.random.normal(0, 2) # ToDo: think about how to generate these
+      bhat = np.random.normal(0, 2)
+      f1, f2 = level_k_interact(strategy1, strategy2, ahat, bhat, k, m)
+    else:
+      f1, f2, action1, action2 = fitness_rational_types(strategy1, strategy2, k, m)
   elif not rational1 and not rational2:
     action1 = strategy1
     f1 = oligopoly_fitness(strategy1, strategy2, k, m) - behavior_cost
@@ -116,7 +159,7 @@ def new_generation(population, game_matrix, k, m, mutation_rate=0.2):
   return population, game_matrix, statistics
 
 
-def run_moran_process(time_steps=5000, population_size=100, mutation_rate=0.01, k=-1.4, m=1.0, freeze_interval=None):
+def run_moran_process(time_steps=5000, population_size=100, mutation_rate=0.01, k=-1.4, m=1.0):
   population = draw_population(population_size)
   game_matrix = construct_game_matrix(population, k, m)
   proportion_rational_series = []
@@ -126,15 +169,15 @@ def run_moran_process(time_steps=5000, population_size=100, mutation_rate=0.01, 
   for _ in range(time_steps):
     population, game_matrix, statistics = new_generation(population, game_matrix, k, m, mutation_rate=mutation_rate)
     
-    # proportion_rational_series.append(statistics['prop_rational'])
-    # util_welfare_series.append(statistics['util_welfare'])
-    # rational_strategy_series.append(statistics['average_rational_strategy'])
+    proportion_rational_series.append(statistics['prop_rational'])
+    util_welfare_series.append(statistics['util_welfare'])
+    rational_strategy_series.append(statistics['average_rational_strategy'])
 
   benchmark_welfare = oligopoly_fitness(m / (2-k), m/(2-k), k, m)
   indirect_ess_welfare, _, _, _ = fitness_rational_types(k / (2 - k), k / (2-k), k, m)
   fig, ax1 = plt.subplots()
-  ax1.set_ylabel('rational strategy')
-  ax1.plot(np.arange(time_steps), rational_strategy_series, color='red')
+  ax1.set_ylabel('prop rational')
+  ax1.plot(np.arange(time_steps), proportion_rational_series, color='red')
   ax2 = ax1.twinx()
   ax2.set_ylabel('welfare')
   ax2.set_ylim(np.min((benchmark_welfare, indirect_ess_welfare)) - 1,
